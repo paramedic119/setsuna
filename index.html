@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+<script>window.Peer||document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"><\/script>');</script>
 <style>
   :root{
     --bg:#04100f; --bg2:#0a201d;
@@ -89,6 +91,7 @@
   body[data-state="title"] #title{display:flex;}
   body[data-state="over"] #over{display:flex;}
   body[data-state="pause"] #pause{display:flex;}
+  body[data-state="lobby"] #lobby{display:flex;}
 
   .kicker{font-size:11px;letter-spacing:.7em;color:var(--teal);font-weight:700;text-indent:.7em;opacity:0;animation:fadeUp .8s .15s forwards;}
   .logo{font-family:"Dela Gothic One";font-size:clamp(78px,27vw,180px);line-height:.86;
@@ -146,6 +149,52 @@
   @keyframes toastPop{0%{opacity:0;transform:scale(.4)}18%{opacity:1;transform:scale(1.05)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15)}}
   .comboA{animation:comboPop .4s ease-out!important;}
   @keyframes comboPop{0%{transform:scale(1.5)}60%{transform:scale(.92)}100%{transform:scale(1)}}
+
+  /* ===== duel ===== */
+  .alt-cta{margin-top:14px;display:flex;gap:10px;opacity:0;animation:fadeUp .8s .95s forwards;}
+  .alt-cta button{font-family:"Zen Kaku Gothic New";font-weight:700;font-size:13px;letter-spacing:.12em;cursor:pointer;
+    padding:12px 22px;border-radius:46px;border:1px solid rgba(255,138,30,.5);background:rgba(255,138,30,.08);color:var(--gold);}
+  .alt-cta button:active{transform:scale(.96);}
+  #lobby{background:rgba(2,9,8,.78);backdrop-filter:blur(7px);}
+  .lobby-card{width:min(420px,90vw);}
+  .lobby-h{font-family:"Dela Gothic One";font-size:clamp(30px,9vw,52px);
+    background:linear-gradient(180deg,#fff,var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px;}
+  .lobby-sub{font-size:12px;letter-spacing:.3em;color:var(--ink-dim);font-weight:700;margin-bottom:22px;}
+  .lobby-row{display:flex;gap:10px;justify-content:center;margin:8px 0;flex-wrap:wrap;}
+  .code-box{font-family:"Dela Gothic One";font-size:clamp(34px,11vw,56px);letter-spacing:.3em;color:var(--gold);
+    text-shadow:0 0 26px rgba(255,138,30,.5);margin:10px 0;}
+  .code-in{font-family:"Dela Gothic One";font-size:28px;letter-spacing:.25em;text-align:center;text-transform:uppercase;
+    width:200px;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:var(--ink);}
+  .lobby-status{font-size:13px;letter-spacing:.12em;color:var(--teal);font-weight:700;margin-top:16px;min-height:20px;}
+  .lobby-status.err{color:var(--danger-2);}
+  .hint{font-size:11px;color:var(--ink-dim);line-height:1.7;margin-top:14px;max-width:340px;}
+
+  #vs{position:absolute;left:50%;transform:translateX(-50%);top:calc(var(--safe-t) + 96px);z-index:9;
+    width:min(360px,86vw);pointer-events:none;opacity:0;transition:opacity .3s;}
+  body.duel[data-state="play"] #vs{opacity:1;}
+  body:not(.duel) #vs{display:none;}
+  .vs-row{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:5px;}
+  .vs-name{width:54px;color:var(--ink-dim);text-align:right;flex:none;}
+  .vs-bar{flex:1;height:8px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;position:relative;}
+  .vs-bar i{position:absolute;inset:0;width:0%;transition:width .25s;border-radius:5px;}
+  .vs-me i{background:linear-gradient(90deg,var(--teal-d),var(--cyan));box-shadow:0 0 10px var(--teal);}
+  .vs-op i{background:linear-gradient(90deg,var(--orange),var(--gold));box-shadow:0 0 10px var(--amber);}
+  .vs-sc{width:62px;font-family:"Dela Gothic One";font-size:13px;flex:none;}
+  .vs-op .vs-sc{color:var(--gold);} .vs-me .vs-sc{color:var(--cyan);}
+  .vs-op.dead{opacity:.4;} .vs-lead{color:var(--gold)!important;}
+
+  body[data-state="vs"] #vsresult{display:flex;}
+  #vsresult{background:rgba(2,9,8,.8);backdrop-filter:blur(7px);}
+  .verdict{font-family:"Dela Gothic One";font-size:clamp(64px,22vw,150px);line-height:.85;opacity:0;transform:scale(1.3);
+    animation:logoIn .8s .1s cubic-bezier(.2,.8,.2,1) forwards;}
+  .verdict.win{background:linear-gradient(180deg,#fff,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 34px rgba(255,209,102,.55));}
+  .verdict.lose{color:#9fb4b0;} .verdict.draw{color:var(--cyan);}
+  .vs-table{display:grid;grid-template-columns:1fr auto 1fr;gap:8px 16px;margin:22px 0 6px;align-items:center;
+    opacity:0;animation:fadeUp .7s .4s forwards;font-size:13px;}
+  .vs-table .me{color:var(--cyan);text-align:right;font-family:"Dela Gothic One";}
+  .vs-table .op{color:var(--gold);text-align:left;font-family:"Dela Gothic One";}
+  .vs-table .lab{font-size:10px;letter-spacing:.2em;color:var(--ink-dim);font-weight:700;}
 </style>
 </head>
 <body data-state="title">
@@ -176,6 +225,10 @@
     <button id="focusBtn">⚡ FOCUS</button>
   </div>
   <div class="combo" id="combo"><div class="x" id="comboX">x2</div><div class="lbl">COMBO</div></div>
+  <div id="vs">
+    <div class="vs-row vs-me"><div class="vs-name">YOU</div><div class="vs-bar"><i id="vsMeBar"></i></div><div class="vs-sc" id="vsMeSc">0</div></div>
+    <div class="vs-row vs-op" id="vsOpRow"><div class="vs-name" id="vsOpName">相手</div><div class="vs-bar"><i id="vsOpBar"></i></div><div class="vs-sc" id="vsOpSc">0</div></div>
+  </div>
   <div id="cue"></div>
   <div id="toast"><span id="toastTxt"></span></div>
 
@@ -190,6 +243,10 @@
       <div class="rule"><div class="ic r3">➤</div><div class="t">SWIPE</div><div class="d">矢印の方向へ</div></div>
     </div>
     <button class="cta" id="startBtn">▶ START</button>
+    <div class="alt-cta">
+      <button id="hostBtn">⚔ 対戦ルーム作成</button>
+      <button id="joinBtn">🔗 コードで参加</button>
+    </div>
     <div class="best" id="titleBest"></div>
   </section>
 
@@ -216,6 +273,38 @@
     <div class="over-btns" style="opacity:1;animation:none;margin-top:28px;">
       <button class="btn2 primary" id="resumeBtn">▶ 再開</button>
       <button class="btn2" id="quitBtn">やめる</button>
+    </div>
+  </section>
+
+  <section class="screen" id="lobby">
+    <div class="lobby-card">
+      <div class="lobby-h" id="lobbyH">対戦</div>
+      <div class="lobby-sub">HEAD TO HEAD</div>
+      <div id="hostView" style="display:none;">
+        <div class="hint" style="margin-top:0">このコードを相手に伝えてください</div>
+        <div class="code-box" id="hostCode">····</div>
+      </div>
+      <div id="joinView" style="display:none;">
+        <div class="lobby-row"><input class="code-in" id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters"></div>
+        <div class="lobby-row"><button class="btn2 primary" id="connectBtn">接続</button></div>
+      </div>
+      <div class="lobby-status" id="lobbyStatus"></div>
+      <div class="hint">同じWiFiやモバイル回線同士だと安定します。接続には数秒かかることがあります。</div>
+      <div class="lobby-row" style="margin-top:18px;"><button class="btn2" id="lobbyBack">← 戻る</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="vsresult">
+    <div class="over-h">VERSUS</div>
+    <div class="verdict" id="verdict">WIN</div>
+    <div class="vs-table">
+      <div class="me" id="vrMe">0</div><div class="lab">SCORE</div><div class="op" id="vrOp">0</div>
+      <div class="me" id="vrMeC">x0</div><div class="lab">MAX COMBO</div><div class="op" id="vrOpC">x0</div>
+      <div class="me" id="vrMeR">—</div><div class="lab">反応速度</div><div class="op" id="vrOpR">—</div>
+    </div>
+    <div class="over-btns">
+      <button class="btn2 primary" id="vsRetryBtn">↻ 再戦</button>
+      <button class="btn2" id="vsHomeBtn">HOME</button>
     </div>
   </section>
 
@@ -268,6 +357,32 @@ const MAXP=240,MAXF=24;
 
 const ARROWS=[{k:'up',dx:0,dy:-1},{k:'down',dx:0,dy:1},{k:'left',dx:-1,dy:0},{k:'right',dx:1,dy:0}];
 
+/* ===== deterministic RNG + schedule (duel) ===== */
+function mulberry32(a){ return function(){ a|=0;a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function seedHash(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+function makeCode(){ const C='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o=''; for(let i=0;i<4;i++)o+=C[(Math.random()*C.length)|0]; return o; }
+// Pure function of seed -> identical on both devices. Draws a fixed number of values per spawn to stay in sync.
+function buildSchedule(seed,n){ const r=mulberry32(seedHash(seed)); const out=[]; let arrowSim=false;
+  for(let k=0;k<n;k++){
+    const hazardP=k<4?0:Math.min(0.32,0.10+(k-4)*0.004);
+    const arrowP =k<8?0:Math.min(0.30,0.12+(k-8)*0.003);
+    const life   =Math.max(0.82,1.75-k*0.016);
+    const roll=r(),dirPick=(r()*4)|0,fx=r(),fy=r(),fspin=r(),jit=0.82+r()*0.34;   // always 6 draws
+    let type='orb';
+    if(roll<hazardP) type='hazard';
+    else if(roll<hazardP+arrowP && !arrowSim) type='arrow';
+    arrowSim = (type==='arrow');
+    out.push({type,fx,fy,fspin,jit,life,dir:ARROWS[dirPick]});
+  } return out; }
+
+/* ===== net/duel state ===== */
+const NET={mode:'solo',role:null,code:null,peer:null,conn:null,schedule:null,
+  oppName:'相手',connected:false,
+  me:{done:false,score:0,combo:0,react:null},
+  opp:{score:0,combo:0,lives:3,alive:true,done:false,react:null}};
+let spawnCount=0, lastNetTx=0;
+
 /* progressive intro + difficulty */
 function diff(){ const t=S.time; return {
   interval:Math.max(0.32,1.05-t*0.018),
@@ -288,6 +403,16 @@ function spawnTarget(){
     targets.push({type:'arrow',x:W/2,y:H*0.46,r:48,life:Math.max(0.82,d.life*0.78),age:0,dir:a,resolved:false}); return; }
   targets.push({type,x:rnd(margin,W-margin),y:rnd(topPad,H-botPad),r:30,
     life:type==='hazard'?d.life*1.05:d.life,age:0,resolved:false,spin:rnd(0,6.28)});
+}
+function spawnFromSchedule(){
+  const sc=NET.schedule, margin=66, topPad=110, botPad=140;
+  const s=sc[Math.min(spawnCount,sc.length-1)]; spawnCount++;
+  if(s.type==='hazard'&&!S.hazardSeen){S.hazardSeen=true;cue('赤は押すな');}
+  if(s.type==='arrow'&&!S.arrowSeen){S.arrowSeen=true;cue('矢印の方向にスワイプ');}
+  if(s.type==='arrow'){ if(arrowActive)return; arrowActive=true;
+    targets.push({type:'arrow',x:W/2,y:H*0.46,r:48,life:Math.max(0.82,s.life*0.78),age:0,dir:s.dir,resolved:false}); return; }
+  targets.push({type:s.type,x:margin+s.fx*(W-2*margin),y:topPad+s.fy*(H-topPad-botPad),r:30,
+    life:s.type==='hazard'?s.life*1.05:s.life,age:0,resolved:false,spin:s.fspin*6.28});
 }
 
 /* particles */
@@ -396,7 +521,9 @@ function step(rdt){
   S.time+=dt;
   if(S.focusActive>0){ S.focusActive-=rdt; if(S.focusActive<=0){S.focusActive=0;timeScaleTarget=1;updFocus();} }
   spawnT-=dt; const d=diff(), active=targets.filter(t=>!t.resolved).length;
-  if(spawnT<=0&&active<d.maxLive){ spawnTarget(); spawnT=d.interval*rnd(0.82,1.16); }
+  if(spawnT<=0&&active<d.maxLive){
+    if(NET.mode==='duel'){ const k=spawnCount; spawnFromSchedule(); const e=NET.schedule[Math.min(k,NET.schedule.length-1)]; spawnT=d.interval*((e&&e.jit)||1); }
+    else { spawnTarget(); spawnT=d.interval*rnd(0.82,1.16); } }
   for(const t of targets){ if(t.resolved)continue; t.age+=dt; if(t.spin!=null)t.spin+=dt;
     if(t.age>=t.life){ t.resolved=true;t.dead=true;
       if(t.type==='orb'){loseLife(t.x,t.y);floatText(t.x,t.y-26,'MISS','#ff6a3d');}
@@ -408,6 +535,8 @@ function step(rdt){
     if(p.life<=0) particles.splice(i,1); }
   for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.life-=rdt/0.85; f.y+=f.vy*rdt; if(f.life<=0) floaters.splice(i,1); }
   if(shake>0) shake=Math.max(0,shake-rdt*60);
+  if(NET.mode==='duel'&&S.alive){ lastNetTx+=rdt; if(lastNetTx>=0.18){ lastNetTx=0;
+    netSend({t:'st',s:S.score,c:S.combo,l:S.lives,a:1}); updVS(); } }
 }
 function intensity(){ return Math.min(1,S.combo/40); }
 
@@ -496,7 +625,7 @@ function setState(s){ body.dataset.state=s; }
 function resetGame(){ targets.length=0;particles.length=0;floaters.length=0;
   Object.assign(S,{time:0,score:0,combo:0,maxCombo:0,lives:3,maxLives:3,focus:0,focusActive:0,
     alive:false,paused:false,orbHits:0,orbPerfect:0,hits:0,reactSum:0,reactN:0,hazardSeen:false,arrowSeen:false});
-  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();
+  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;
   updHud();updFocus();renderLives();hideCombo(); cueEl.style.opacity='0'; }
 function startCountdown(){ setState('play');body.classList.add('cine');resetGame();
   if(TEST){ S.alive=true; return; }
@@ -514,6 +643,9 @@ function gameOver(){ S.alive=false;timeScaleTarget=1;shake=RM?8:22;doFlash(.6);s
   else if(s>=1300){rank='C';flavor='まだ伸びしろがある';col='#eafffb';}
   else{rank='D';flavor='訓練を続けよ';col='#ff8a1e';}
   lastResult={rank,score:s,react,acc,combo:S.maxCombo};
+  if(NET.mode==='duel'){ NET.me={done:true,score:s,combo:S.maxCombo,react,acc};
+    netSend({t:'end',s:s,c:S.maxCombo,r:react,acc:acc}); updVS();
+    if(!TEST) setTimeout(maybeVSResult,500); else maybeVSResult(); return; }
   const $=id=>document.getElementById(id);
   $('rank').textContent=rank;$('rank').style.color=col;$('rank').style.textShadow='0 0 50px '+col;
   $('flavor').textContent=flavor; $('sScore').textContent=s.toLocaleString('en-US');
@@ -530,7 +662,7 @@ function pauseGame(){ if(!S.alive||S.paused)return; S.paused=true; setState('pau
 function resumeGame(){ if(!S.paused)return; S.paused=false; setState('play'); last=0; }
 document.getElementById('pauseBtn').addEventListener('pointerdown',e=>{e.stopPropagation();pauseGame();});
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
-document.getElementById('quitBtn').addEventListener('click',()=>{S.paused=false;S.alive=false;setState('title');body.classList.remove('cine');refreshBest();});
+document.getElementById('quitBtn').addEventListener('click',()=>{S.paused=false;S.alive=false;if(NET.mode==='duel')leaveDuel();setState('title');body.classList.remove('cine');refreshBest();});
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.alive&&!S.paused) pauseGame(); else if(!document.hidden) last=0; });
 
 /* mute */
@@ -555,10 +687,96 @@ document.getElementById('startBtn').addEventListener('click',()=>{audioInit();st
 document.getElementById('retryBtn').addEventListener('click',()=>{audioInit();startCountdown();});
 document.getElementById('homeBtn').addEventListener('click',()=>{setState('title');refreshBest();});
 
+/* ===== duel: networking (PeerJS) + VS logic ===== */
+function netSend(msg){ try{ if(NET.conn&&NET.conn.open) NET.conn.send(msg); }catch(e){} }
+function lobbyStatus(txt,err){ const e=document.getElementById('lobbyStatus'); if(!e)return; e.textContent=txt||''; e.classList.toggle('err',!!err); }
+function openLobby(which){ setState('lobby');
+  document.getElementById('hostView').style.display=which==='host'?'block':'none';
+  document.getElementById('joinView').style.display=which==='join'?'block':'none';
+  document.getElementById('lobbyH').textContent=which==='host'?'ルーム作成':'参加';
+  document.getElementById('hostCode').textContent='····'; lobbyStatus(''); }
+
+function bindConn(conn){ NET.conn=conn;
+  conn.on('open',()=>{ NET.connected=true;
+    if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000);
+      netSend({t:'seed',seed:NET.seed}); lobbyStatus('接続完了！'); setTimeout(beginDuel,600); }
+    else lobbyStatus('接続完了！開始を待っています'); });
+  conn.on('data',onData);
+  conn.on('close',()=>onPeerLost('相手が切断しました'));
+  conn.on('error',()=>onPeerLost('通信エラー')); }
+function onData(d){ if(!d||typeof d!=='object')return;
+  if(d.t==='seed'){ NET.seed=d.seed; NET.schedule=buildSchedule(d.seed,2000); lobbyStatus('開始します'); setTimeout(beginDuel,250); return; }
+  if(d.t==='st'){ NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.lives=d.l|0;NET.opp.alive=!!d.a; updVS(); return; }
+  if(d.t==='end'){ NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0); updVS(); maybeVSResult(); return; }
+  if(d.t==='rematch'){ if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000); netSend({t:'seed',seed:NET.seed}); beginDuel(); } return; }
+  if(d.t==='bye'){ onPeerLost('相手が退出しました'); } }
+function onPeerLost(reason){ NET.connected=false;
+  if(document.body.dataset.state==='lobby'){ lobbyStatus(reason,true); return; }
+  if(NET.mode==='duel'){ NET.opp.done=true;NET.opp.alive=false;NET.oppLost=true; cue(reason); maybeVSResult(); } }
+
+function hostRoom(){ openLobby('host'); NET.role='host'; NET.oppLost=false;
+  if(!window.Peer){ lobbyStatus('通信ライブラリを読み込めません（オンライン環境で再試行）',true); return; }
+  NET.code=makeCode(); document.getElementById('hostCode').textContent=NET.code; lobbyStatus('コードを相手に伝えてください');
+  try{ NET.peer=new Peer('setsuna-'+NET.code,{debug:1});
+    NET.peer.on('open',()=>lobbyStatus('相手の参加を待っています…'));
+    NET.peer.on('connection',c=>{ lobbyStatus('接続中…'); bindConn(c); });
+    NET.peer.on('error',e=>lobbyStatus('エラー: '+((e&&e.type)||'不明')+' — 戻って再作成を',true));
+  }catch(e){ lobbyStatus('開始できませんでした',true); } }
+function joinRoom(){ openLobby('join'); NET.role='guest'; NET.oppLost=false; document.getElementById('codeInput').value=''; }
+function connectRoom(){ const code=((document.getElementById('codeInput').value)||'').trim().toUpperCase();
+  if(code.length<4){ lobbyStatus('4文字のコードを入力してください',true); return; }
+  if(!window.Peer){ lobbyStatus('通信ライブラリを読み込めません（オンライン環境で再試行）',true); return; }
+  NET.code=code; lobbyStatus('接続中…');
+  try{ NET.peer=new Peer({debug:1});
+    NET.peer.on('open',()=>{ const c=NET.peer.connect('setsuna-'+code,{reliable:true}); if(c)bindConn(c); else lobbyStatus('接続を開始できません',true); });
+    NET.peer.on('error',e=>lobbyStatus('接続失敗: '+((e&&e.type)||'不明'),true));
+  }catch(e){ lobbyStatus('接続できませんでした',true); } }
+function leaveDuel(){ try{netSend({t:'bye'});}catch(e){} try{if(NET.conn)NET.conn.close();}catch(e){}
+  try{if(NET.peer)NET.peer.destroy();}catch(e){}
+  NET.mode='solo';NET.conn=null;NET.peer=null;NET.connected=false;NET.schedule=null;NET.oppLost=false;
+  document.body.classList.remove('duel'); }
+
+function beginDuel(){ NET.mode='duel'; NET.me={done:false,score:0,combo:0,react:null};
+  NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null}; NET.oppLost=false;
+  document.getElementById('vsOpName').textContent=NET.oppName; document.body.classList.add('duel');
+  startCountdown(); updVS(); }
+function updVS(){ if(NET.mode!=='duel')return; const mx=Math.max(S.score,NET.opp.score,1);
+  document.getElementById('vsMeBar').style.width=(S.score/mx*100)+'%';
+  document.getElementById('vsOpBar').style.width=(NET.opp.score/mx*100)+'%';
+  document.getElementById('vsMeSc').textContent=S.score.toLocaleString('en-US');
+  document.getElementById('vsOpSc').textContent=NET.opp.score.toLocaleString('en-US');
+  document.getElementById('vsOpRow').classList.toggle('dead',!NET.opp.alive);
+  document.getElementById('vsMeSc').classList.toggle('vs-lead',S.score>=NET.opp.score);
+  document.getElementById('vsOpSc').classList.toggle('vs-lead',NET.opp.score>S.score); }
+function maybeVSResult(){ if(NET.mode!=='duel'||!NET.me.done)return; if(!NET.opp.done&&!NET.oppLost)return; showVSResult(); }
+function showVSResult(){ if(document.body.dataset.state==='vs')return; const me=NET.me,op=NET.opp;
+  let verdict,cls;
+  if(NET.oppLost){verdict='相手切断';cls='draw';}
+  else if(me.score>op.score){verdict='WIN';cls='win';sMile();doFlash(.5);}
+  else if(me.score<op.score){verdict='LOSE';cls='lose';}
+  else{verdict='DRAW';cls='draw';}
+  const v=document.getElementById('verdict'); v.textContent=verdict; v.className='verdict '+cls;
+  const $=id=>document.getElementById(id);
+  $('vrMe').textContent=(me.score|0).toLocaleString('en-US'); $('vrOp').textContent=(op.score|0).toLocaleString('en-US');
+  $('vrMeC').textContent='x'+(me.combo|0); $('vrOpC').textContent='x'+(op.combo|0);
+  $('vrMeR').innerHTML=me.react!=null?me.react+'<small>ms</small>':'—'; $('vrOpR').innerHTML=op.react!=null?op.react+'<small>ms</small>':'—';
+  if(me.score>best){best=me.score;saveBest();}
+  setState('vs'); document.body.classList.remove('cine'); }
+
+document.getElementById('hostBtn').addEventListener('click',()=>{audioInit();hostRoom();});
+document.getElementById('joinBtn').addEventListener('click',()=>{audioInit();joinRoom();});
+document.getElementById('connectBtn').addEventListener('click',()=>{audioInit();connectRoom();});
+document.getElementById('lobbyBack').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
+document.getElementById('vsRetryBtn').addEventListener('click',()=>{ if(NET.connected&&NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000); netSend({t:'seed',seed:NET.seed}); beginDuel(); } else if(NET.connected){ netSend({t:'rematch'}); cue('相手(ホスト)の再戦を待っています'); } else { leaveDuel(); setState('title'); refreshBest(); } });
+document.getElementById('vsHomeBtn').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
+
 /* boot */
 resize(); renderLives(); loadBest(); requestAnimationFrame(frame);
 
 if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,
+  buildSchedule,seedHash,onData,updVS,maybeVSResult,showVSResult,
+  get NET(){return NET;}, get spawnCount(){return spawnCount;},
+  beginDuelTEST(seed){ NET.schedule=buildSchedule(seed,2000); NET.seed=seed; beginDuel(); },
   get timeScale(){return timeScale;}, get arrowActive(){return arrowActive;}, setW(w,h){W=w;H=h;seedMotes();} }; }
 })();
 </script>
