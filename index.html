@@ -403,9 +403,9 @@ const ARROWS=[{k:'up',dx:0,dy:-1},{k:'down',dx:0,dy:1},{k:'left',dx:-1,dy:0},{k:
 
 /* ===== difficulty tiers (EASY = original tuning) ===== */
 const TIERS={
-  easy:   {lab:'EASY',   sub:'入門', spd:1.00, life:1.00, dens:1.00, haz:1.00},
-  normal: {lab:'NORMAL', sub:'標準', spd:1.24, life:0.82, dens:1.18, haz:1.28},
-  hard:   {lab:'HARD',   sub:'極限', spd:1.55, life:0.66, dens:1.40, haz:1.62}
+  easy:   {lab:'EASY',   sub:'入門', spd:1.00, life:1.00, dens:1.00, haz:1.00, far:0.10},
+  normal: {lab:'NORMAL', sub:'標準', spd:1.24, life:0.82, dens:1.06, haz:1.28, far:0.34},
+  hard:   {lab:'HARD',   sub:'極限', spd:1.55, life:0.66, dens:1.12, haz:1.62, far:0.55}
 };
 let DIFFK='normal';
 function T(){ return TIERS[DIFFK]||TIERS.normal; }
@@ -425,15 +425,23 @@ function seedHash(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;
 function makeCode(){ const C='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o=''; for(let i=0;i<4;i++)o+=C[(Math.random()*C.length)|0]; return o; }
 // Pure function of seed -> identical on both devices. Draws a fixed number of values per spawn to stay in sync.
 function buildSchedule(seed,n,dk){ const r=mulberry32(seedHash(seed)); const tt=TIERS[dk]||TIERS.normal; const out=[]; let arrowSim=false;
+  let prevfx=0.5, prevfy=0.5;   // previous orb/hazard normalized pos (for deterministic spacing)
   for(let k=0;k<n;k++){
     const hazardP=k<4?0:Math.min(0.46,(0.10+(k-4)*0.004)*tt.haz);
     const arrowP =k<8?0:Math.min(0.42,(0.12+(k-8)*0.003)*tt.haz);
     const life   =Math.max(0.55,(1.75-k*0.016)*tt.life);
-    const roll=r(),dirPick=(r()*4)|0,fx=r(),fy=r(),fspin=r(),jit=(0.82+r()*0.34)/tt.spd;   // always 6 draws
+    const roll=r(),dirPick=(r()*4)|0,fspin=r(),jit=(0.82+r()*0.34)/tt.spd;
+    // 6 candidate positions; deterministically pick the one farthest from prev that meets `far`, in normalized space
+    const cand=[]; for(let c=0;c<6;c++) cand.push({x:r(),y:r()});   // 12 draws
     let type='orb';
     if(roll<hazardP) type='hazard';
     else if(roll<hazardP+arrowP && !arrowSim) type='arrow';
     arrowSim = (type==='arrow');
+    let fx=cand[0].x, fy=cand[0].y;
+    if(type!=='arrow'){ let best=-1,bx=cand[0].x,by=cand[0].y;
+      for(const c of cand){ const dpx=(c.x-prevfx),dpy=(c.y-prevfy)*1.6; const dd=Math.hypot(dpx,dpy);
+        if(dd>best){best=dd;bx=c.x;by=c.y;} if(dd>=tt.far)break; }
+      fx=bx; fy=by; prevfx=fx; prevfy=fy; }
     out.push({type,fx,fy,fspin,jit,life,dir:ARROWS[dirPick]});
   } return out; }
 
@@ -450,11 +458,26 @@ function diff(){ const t=S.time, tt=T(); return {
   life:Math.max(0.55,(1.75-t*0.013)*tt.life),
   hazardP: t<5?0:Math.min(0.46,(0.10+(t-5)*0.0030)*tt.haz),
   arrowP:  t<10?0:Math.min(0.42,(0.12+(t-10)*0.0024)*tt.haz),
-  maxLive:Math.min(Math.round(6*tt.dens),2+Math.floor(t/9*tt.dens)) }; }
+  maxLive:Math.min(Math.round(5*tt.dens),2+Math.floor(t/12)) }; }
 
 function rnd(a,b){return a+Math.random()*(b-a);}
+const PLACE={margin:66,topPad:110,botPad:140,minGap:96};   // minGap: no two targets closer than this (px)
+function lastTapPos(){ // most recent existing orb/hazard, else screen center
+  for(let i=targets.length-1;i>=0;i--){ const t=targets[i]; if(!t.resolved&&(t.type==='orb'||t.type==='hazard')) return {x:t.x,y:t.y}; }
+  return S.lastPos||{x:W/2,y:H/2}; }
+function overlaps(x,y){ for(const t of targets){ if(t.resolved||t.type==='arrow')continue;
+  if(Math.hypot(t.x-x,t.y-y)<PLACE.minGap) return true; } return false; }
+// pick a position (solo, non-deterministic): no overlap + at least `farMin` (fraction of screen diag) from previous
+function pickPos(farMin){
+  const {margin,topPad,botPad}=PLACE, diag=Math.hypot(W,H), need=farMin*diag, prev=lastTapPos();
+  let best=null,bestD=-1;
+  for(let i=0;i<26;i++){ const x=rnd(margin,W-margin),y=rnd(topPad,H-botPad);
+    if(overlaps(x,y))continue; const dprev=Math.hypot(x-prev.x,y-prev.y);
+    if(dprev>bestD){bestD=dprev;best={x,y};} if(dprev>=need)return {x,y}; }
+  return best||{x:rnd(margin,W-margin),y:rnd(topPad,H-botPad)};
+}
 function spawnTarget(){
-  const d=diff(), margin=66, topPad=110, botPad=140;
+  const d=diff();
   let type='orb'; const roll=Math.random();
   if(roll<d.hazardP) type='hazard';
   else if(roll<d.hazardP+d.arrowP && !arrowActive) type='arrow';
@@ -462,17 +485,24 @@ function spawnTarget(){
   if(type==='arrow'&&!S.arrowSeen){S.arrowSeen=true;cue('矢印の方向にスワイプ');}
   if(type==='arrow'){ arrowActive=true; const a=ARROWS[(Math.random()*4)|0];
     targets.push({type:'arrow',x:W/2,y:H*0.46,r:48,life:Math.max(0.82,d.life*0.78),age:0,dir:a,resolved:false}); return; }
-  targets.push({type,x:rnd(margin,W-margin),y:rnd(topPad,H-botPad),r:30,
+  const p=pickPos(T().far); S.lastPos={x:p.x,y:p.y};
+  targets.push({type,x:p.x,y:p.y,r:30,
     life:type==='hazard'?d.life*1.05:d.life,age:0,resolved:false,spin:rnd(0,6.28)});
 }
 function spawnFromSchedule(){
-  const sc=NET.schedule, margin=66, topPad=110, botPad=140;
+  const sc=NET.schedule, {margin,topPad,botPad}=PLACE;
   const s=sc[Math.min(spawnCount,sc.length-1)]; spawnCount++;
   if(s.type==='hazard'&&!S.hazardSeen){S.hazardSeen=true;cue('赤は押すな');}
   if(s.type==='arrow'&&!S.arrowSeen){S.arrowSeen=true;cue('矢印の方向にスワイプ');}
   if(s.type==='arrow'){ if(arrowActive)return; arrowActive=true;
     targets.push({type:'arrow',x:W/2,y:H*0.46,r:48,life:Math.max(0.82,s.life*0.78),age:0,dir:s.dir,resolved:false}); return; }
-  targets.push({type:s.type,x:margin+s.fx*(W-2*margin),y:topPad+s.fy*(H-topPad-botPad),r:30,
+  let x=margin+s.fx*(W-2*margin), y=topPad+s.fy*(H-topPad-botPad);
+  // deterministic de-overlap: rotate around scheduled point by fspin until clear (same on both devices: field is identical)
+  if(overlaps(x,y)){ const baseA=s.fspin*6.283;
+    for(let i=1;i<=6;i++){ const a=baseA+i*1.047, rad=PLACE.minGap*(1+i*0.18);
+      const nx=Math.min(W-margin,Math.max(margin,x+Math.cos(a)*rad)), ny=Math.min(H-botPad,Math.max(topPad,y+Math.sin(a)*rad));
+      if(!overlaps(nx,ny)){ x=nx;y=ny;break; } } }
+  targets.push({type:s.type,x,y,r:30,
     life:s.type==='hazard'?s.life*1.05:s.life,age:0,resolved:false,spin:s.fspin*6.28});
 }
 
@@ -532,9 +562,9 @@ function tryFocus(){ if(S.focus<100||S.focusActive>0||!S.alive)return;
   if(NET.mode==='duel'){ netSend({t:'atk'}); floatText(W/2,H*0.30,'⚡ 妨害発射','#ffd166'); } }
 function incomingAttack(){ if(!S.alive)return;
   cue('⚠ 妨害を受けた！'); doFlash(.5); shake=Math.max(shake,RM?8:18); sFail();
-  const margin=66,topPad=110,botPad=140,n=2+((Math.random()*2)|0);
-  for(let i=0;i<n;i++) targets.push({type:'hazard',x:rnd(margin,W-margin),y:rnd(topPad,H-botPad),r:30,
-    life:1.1,age:0,resolved:false,spin:rnd(0,6.28),atk:true}); }
+  const n=2+((Math.random()*2)|0);
+  for(let i=0;i<n;i++){ const p=pickPos(0.2);
+    targets.push({type:'hazard',x:p.x,y:p.y,r:30,life:1.1,age:0,resolved:false,spin:rnd(0,6.28),atk:true}); } }
 
 /* dom effects */
 const flashEl=document.getElementById('flash'),dmgEl=document.getElementById('dmg');
@@ -701,7 +731,7 @@ function setState(s){ body.dataset.state=s; }
 function resetGame(){ targets.length=0;particles.length=0;floaters.length=0;
   Object.assign(S,{time:0,score:0,combo:0,maxCombo:0,lives:3,maxLives:3,focus:0,focusActive:0,
     alive:false,paused:false,orbHits:0,orbPerfect:0,hits:0,reactSum:0,reactN:0,hazardSeen:false,arrowSeen:false});
-  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;runClock=0;
+  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;runClock=0;S.lastPos={x:W/2,y:H/2};
   updHud();updFocus();renderLives();hideCombo(); cueEl.style.opacity='0'; }
 function startCountdown(){
   roundDur = (NET.mode==='duel') ? DUEL_DUR : ((MODES[MODE]&&MODES[MODE].dur)||0);
