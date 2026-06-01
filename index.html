@@ -173,6 +173,7 @@
     width:min(360px,86vw);pointer-events:none;opacity:0;transition:opacity .3s;}
   body.duel[data-state="play"] #vs{opacity:1;}
   body:not(.duel) #vs{display:none;}
+  body.zen .lives{display:none;}
   .vs-row{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:5px;}
   .vs-name{width:54px;color:var(--ink-dim);text-align:right;flex:none;}
   .vs-bar{flex:1;height:8px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;position:relative;}
@@ -210,6 +211,18 @@
   .diff-sel button[data-d="normal"].sel{background:linear-gradient(180deg,#7fffe9,var(--teal-d));}
   .diff-label{font-size:10px;letter-spacing:.35em;color:var(--ink-dim);font-weight:700;margin-bottom:-6px;
     opacity:0;animation:fadeUp .8s .78s forwards;}
+  .clock{font-family:"Dela Gothic One";font-size:clamp(15px,4.4vw,20px);line-height:1;margin-top:5px;color:var(--gold);
+    text-shadow:0 0 16px rgba(255,138,30,.45);min-height:14px;letter-spacing:.04em;}
+  .clock.warn{color:var(--danger-2);text-shadow:0 0 18px rgba(255,59,48,.6);animation:clkPulse .5s ease-in-out infinite;}
+  @keyframes clkPulse{50%{opacity:.45;}}
+  .diff-sel.mode-sel button.sel{background:linear-gradient(180deg,#ffb066,var(--amber));
+    box-shadow:0 0 0 2px rgba(255,255,255,.25) inset,0 6px 22px rgba(255,138,30,.4);}
+  #title .diff-sel{margin:14px 0 2px;} #title .diff-label{margin-top:10px;}
+  .match-pips{display:flex;gap:7px;justify-content:center;margin:6px 0 2px;}
+  .match-pips .mp{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.12);transition:.2s;}
+  .match-pips .mp.me{background:var(--cyan);box-shadow:0 0 10px var(--teal);}
+  .match-pips .mp.op{background:var(--gold);box-shadow:0 0 10px var(--amber);}
+  .round-tag{font-size:11px;letter-spacing:.3em;color:var(--ink-dim);font-weight:700;}
 </style>
 </head>
 <body data-state="title">
@@ -233,14 +246,16 @@
         <button class="icbtn" id="muteBtn" aria-label="mute">🔊</button>
       </div>
       <div class="score-wrap">
-        <div class="score-label">SCORE</div>
+        <div class="score-label" id="scoreLabel">SCORE</div>
         <div class="score" id="score">0</div>
+        <div class="clock" id="clock"></div>
       </div>
     </div>
     <button id="focusBtn">⚡ FOCUS</button>
   </div>
   <div class="combo" id="combo"><div class="x" id="comboX">x2</div><div class="lbl">COMBO</div></div>
   <div id="vs">
+    <div class="round-tag" id="roundTag" style="text-align:center;margin-bottom:3px;"></div>
     <div class="vs-row vs-me"><div class="vs-name">YOU</div><div class="vs-bar"><i id="vsMeBar"></i></div><div class="vs-sc" id="vsMeSc">0</div></div>
     <div class="vs-row vs-op" id="vsOpRow"><div class="vs-name" id="vsOpName">相手</div><div class="vs-bar"><i id="vsOpBar"></i></div><div class="vs-sc" id="vsOpSc">0</div></div>
   </div>
@@ -257,6 +272,12 @@
       <div class="rule"><div class="ic r2">✕</div><div class="t">AVOID</div><div class="d">赤は押すな</div></div>
       <div class="rule"><div class="ic r3">➤</div><div class="t">SWIPE</div><div class="d">矢印の方向へ</div></div>
     </div>
+    <div class="diff-label">MODE</div>
+    <div class="diff-sel mode-sel" id="modeSel">
+      <button data-m="survival"><span class="dl">耐久</span><span class="ds">SURVIVAL</span></button>
+      <button data-m="ta"><span class="dl">タイム</span><span class="ds">60秒</span></button>
+      <button data-m="zen"><span class="dl">禅</span><span class="ds">練習</span></button>
+    </div>
     <div class="diff-label">DIFFICULTY</div>
     <div class="diff-sel" id="diffSel">
       <button data-d="easy"><span class="dl">EASY</span><span class="ds">入門</span></button>
@@ -272,12 +293,12 @@
   </section>
 
   <section class="screen" id="over">
-    <div class="over-h">RESULT</div>
+    <div class="over-h" id="overH">RESULT</div>
     <div class="over-rank" id="rank">A</div>
     <div class="over-flavor" id="flavor"></div>
     <div class="newbest" id="newBest">★ NEW BEST ★</div>
     <div class="stats">
-      <div class="stat"><div class="v" id="sScore">0</div><div class="k">SCORE</div></div>
+      <div class="stat"><div class="v" id="sScore">0</div><div class="k" id="sScoreK">SCORE</div></div>
       <div class="stat"><div class="v" id="sCombo">0</div><div class="k">MAX COMBO</div></div>
       <div class="stat"><div class="v" id="sReact">—</div><div class="k">反応速度</div></div>
       <div class="stat"><div class="v" id="sAcc">0<small>%</small></div><div class="k">精度</div></div>
@@ -317,7 +338,8 @@
   </section>
 
   <section class="screen" id="vsresult">
-    <div class="over-h">VERSUS</div>
+    <div class="over-h" id="vsHdr">VERSUS</div>
+    <div class="match-pips" id="matchPips"></div>
     <div class="verdict" id="verdict">WIN</div>
     <div class="vs-table">
       <div class="me" id="vrMe">0</div><div class="lab">SCORE</div><div class="op" id="vrOp">0</div>
@@ -388,6 +410,14 @@ const TIERS={
 let DIFFK='normal';
 function T(){ return TIERS[DIFFK]||TIERS.normal; }
 
+/* ===== modes ===== */
+const MODES={ survival:{lab:'SURVIVAL',sub:'耐久',dur:0}, ta:{lab:'TIME ATTACK',sub:'60秒',dur:60}, zen:{lab:'ZEN',sub:'練習',dur:0} };
+let MODE='survival';         // effective gameplay mode
+let selMode='survival';      // title selection (persisted)
+const DUEL_DUR=45;           // seconds per duel round
+let roundDur=0;              // >0 = time-limited run (TA / duel round)
+let runClock=0;             // real-time elapsed in current run (TA/duel use real seconds)
+
 /* ===== deterministic RNG + schedule (duel) ===== */
 function mulberry32(a){ return function(){ a|=0;a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -409,7 +439,7 @@ function buildSchedule(seed,n,dk){ const r=mulberry32(seedHash(seed)); const tt=
 
 /* ===== net/duel state ===== */
 const NET={mode:'solo',role:null,code:null,peer:null,conn:null,schedule:null,
-  oppName:'相手',connected:false,
+  oppName:'相手',connected:false,round:1,myWins:0,oppWins:0,atkPend:0,
   me:{done:false,score:0,combo:0,react:null},
   opp:{score:0,combo:0,lives:3,alive:true,done:false,react:null}};
 let spawnCount=0, lastNetTx=0;
@@ -458,12 +488,14 @@ function seedMotes(){ motes.length=0; const n=Math.round((W*H)/26000); for(let i
 function addScore(p){ S.score+=Math.round(p); updHud(); }
 function comboMult(){ return Math.min(8,1+S.combo*0.1)*(S.focusActive>0?2:1); }
 function bumpCombo(){ S.combo++; S.maxCombo=Math.max(S.maxCombo,S.combo);
-  if(S.combo%25===0 && S.lives<S.maxLives){ S.lives++; renderLives(); floatText(W/2,H*0.36,'+1 LIFE','#2ff0d6'); }
+  if(MODE!=='zen' && S.combo%25===0 && S.lives<S.maxLives){ S.lives++; renderLives(); floatText(W/2,H*0.36,'+1 LIFE','#2ff0d6'); }
   if([10,25,50,75,100,150,200,300].indexOf(S.combo)>=0) comboMilestone(S.combo);
   showCombo(); }
 function resetCombo(){ S.combo=0; hideCombo(); }
-function loseLife(x,y){ S.lives--; resetCombo(); shake=Math.max(shake,RM?6:16); flashDmg();
-  if(x!=null) burst(x,y,'#ff6a3d',26,420); sFail(); vibrate([34,28,34]); renderLives();
+function loseLife(x,y){ resetCombo(); shake=Math.max(shake,RM?6:16); flashDmg();
+  if(x!=null) burst(x,y,'#ff6a3d',26,420); sFail(); vibrate([34,28,34]);
+  if(MODE==='zen') return;            // Zen: endless practice, never lose lives
+  S.lives--; renderLives();
   if(S.lives<=0) gameOver(); }
 
 function tapAt(x,y){
@@ -496,7 +528,13 @@ function swipeDir(dir){
 }
 function microSlow(){ timeScaleTarget=0.18; setTimeout(()=>{ if(S.focusActive<=0) timeScaleTarget=1; },130); }
 function tryFocus(){ if(S.focus<100||S.focusActive>0||!S.alive)return;
-  S.focusActive=4.2;S.focus=0;updFocus(); timeScaleTarget=0.34; sFocus(); doFlash(.7); vibrate([20,40,20]); bigToast('FOCUS','#ffd166'); }
+  S.focusActive=4.2;S.focus=0;updFocus(); timeScaleTarget=0.34; sFocus(); doFlash(.7); vibrate([20,40,20]); bigToast('FOCUS','#ffd166');
+  if(NET.mode==='duel'){ netSend({t:'atk'}); floatText(W/2,H*0.30,'⚡ 妨害発射','#ffd166'); } }
+function incomingAttack(){ if(!S.alive)return;
+  cue('⚠ 妨害を受けた！'); doFlash(.5); shake=Math.max(shake,RM?8:18); sFail();
+  const margin=66,topPad=110,botPad=140,n=2+((Math.random()*2)|0);
+  for(let i=0;i<n;i++) targets.push({type:'hazard',x:rnd(margin,W-margin),y:rnd(topPad,H-botPad),r:30,
+    life:1.1,age:0,resolved:false,spin:rnd(0,6.28),atk:true}); }
 
 /* dom effects */
 const flashEl=document.getElementById('flash'),dmgEl=document.getElementById('dmg');
@@ -517,6 +555,11 @@ const elScore=document.getElementById('score'),elLives=document.getElementById('
   elFocusFill=document.getElementById('focusFill'),elCombo=document.getElementById('combo'),
   elComboX=document.getElementById('comboX'),focusBtn=document.getElementById('focusBtn');
 function updHud(){ elScore.textContent=S.score.toLocaleString('en-US'); }
+function updClock(){ const el=document.getElementById('clock'); if(!el)return;
+  if(roundDur>0){ const r=Math.max(0,roundDur-runClock); el.textContent=r.toFixed(1)+'s'; el.classList.toggle('warn',r<=5); }
+  else if(MODE==='zen'&&NET.mode!=='duel'){ const avg=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
+    el.textContent=avg!=null?('反応 '+avg+'ms'):'反応 —'; el.classList.remove('warn'); }
+  else { el.textContent=''; el.classList.remove('warn'); } }
 function updFocus(){ elFocusFill.style.width=S.focus+'%'; if(S.focus>=100&&S.focusActive<=0)focusBtn.classList.add('ready'); else focusBtn.classList.remove('ready'); }
 function renderLives(){ elLives.innerHTML=''; const n=Math.max(S.lives,0);
   for(let i=0;i<S.maxLives;i++){const d=document.createElement('div');d.className='pip'+(i<n?'':' dead');elLives.appendChild(d);} }
@@ -550,6 +593,8 @@ function step(rdt){
   if(!S.alive||S.paused) return;
   const dt=rdt*timeScale;
   S.time+=dt;
+  if(roundDur>0){ runClock+=rdt; updClock(); if(runClock>=roundDur){ endRun('time'); return; } }
+  else if(MODE==='zen') updClock();
   if(S.focusActive>0){ S.focusActive-=rdt; if(S.focusActive<=0){S.focusActive=0;timeScaleTarget=1;updFocus();} }
   spawnT-=dt; const d=diff(), active=targets.filter(t=>!t.resolved).length;
   if(spawnT<=0&&active<d.maxLive){
@@ -656,32 +701,53 @@ function setState(s){ body.dataset.state=s; }
 function resetGame(){ targets.length=0;particles.length=0;floaters.length=0;
   Object.assign(S,{time:0,score:0,combo:0,maxCombo:0,lives:3,maxLives:3,focus:0,focusActive:0,
     alive:false,paused:false,orbHits:0,orbPerfect:0,hits:0,reactSum:0,reactN:0,hazardSeen:false,arrowSeen:false});
-  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;
+  spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;runClock=0;
   updHud();updFocus();renderLives();hideCombo(); cueEl.style.opacity='0'; }
-function startCountdown(){ setState('play');body.classList.add('cine');resetGame();
+function startCountdown(){
+  roundDur = (NET.mode==='duel') ? DUEL_DUR : ((MODES[MODE]&&MODES[MODE].dur)||0);
+  body.classList.toggle('zen',MODE==='zen'&&NET.mode!=='duel');
+  document.getElementById('scoreLabel').textContent = (MODE==='zen'&&NET.mode!=='duel')?'TAPS':'SCORE';
+  setState('play');body.classList.add('cine');resetGame(); updClock();
   if(TEST){ S.alive=true; return; }
+  const modeCue = NET.mode==='duel' ? ('対戦 R'+NET.round+' / '+DUEL_DUR+'秒')
+    : MODE==='ta' ? (MODES.ta.dur+'秒 タイムアタック') : MODE==='zen' ? '禅 — 反応速度を磨け' : '輪が重なる瞬間にタップ';
   let n=3; const tick=()=>{ if(n>0){bigToast(String(n),n===1?'#ffd166':'#2ff0d6');sBeep(false);n--;setTimeout(tick,650);}
-    else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue((T().lab)+' — '+(NET.mode==='duel'?'対戦開始':'輪が重なる瞬間にタップ'));S.alive=true;last=0;} }; tick(); }
-function gameOver(){ S.alive=false;timeScaleTarget=1;shake=RM?8:22;doFlash(.6);sFail();
+    else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue((T().lab)+' — '+modeCue);S.alive=true;last=0;} }; tick(); }
+function gameOver(){ endRun('dead'); }
+function endRun(reason){ if(!S.alive)return; S.alive=false; timeScaleTarget=1; shake=RM?8:22; doFlash(.6);
+  if(reason==='dead') sFail(); else sMile();
+  if(NET.mode==='duel'){ finishRound(reason); return; }
+  showSoloResult(reason); }
+function showSoloResult(reason){
   const acc=S.orbHits>0?Math.round(S.orbPerfect/S.orbHits*100):0;
   const react=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
-  const isBest=S.score>best; if(isBest){best=S.score;saveBest();}
-  let rank,flavor,col; const s=S.score;
-  if(s>=9000){rank='SS';flavor='神域の反射神経';col='#ffd166';}
-  else if(s>=6500){rank='S';flavor='超人的な瞬発力';col='#ffd166';}
-  else if(s>=4200){rank='A';flavor='研ぎ澄まされた感覚';col='#2ff0d6';}
-  else if(s>=2600){rank='B';flavor='確かな手応え';col='#5ffff0';}
-  else if(s>=1300){rank='C';flavor='まだ伸びしろがある';col='#eafffb';}
-  else{rank='D';flavor='訓練を続けよ';col='#ff8a1e';}
-  lastResult={rank,score:s,react,acc,combo:S.maxCombo};
-  if(NET.mode==='duel'){ NET.me={done:true,score:s,combo:S.maxCombo,react,acc};
-    netSend({t:'end',s:s,c:S.maxCombo,r:react,acc:acc}); updVS();
-    if(!TEST) setTimeout(maybeVSResult,500); else maybeVSResult(); return; }
+  let rank,flavor,col,isBest=false; const s=S.score;
+  if(MODE==='zen'){
+    if(react==null){rank='—';flavor='矢印に挑戦して反応速度を計測';col='#eafffb';}
+    else if(react<300){rank='SS';flavor='神域の反射速度';col='#ffd166';}
+    else if(react<360){rank='S';flavor='超人的な瞬発力';col='#ffd166';}
+    else if(react<430){rank='A';flavor='研ぎ澄まされた反応';col='#2ff0d6';}
+    else if(react<520){rank='B';flavor='良好な反応速度';col='#5ffff0';}
+    else if(react<650){rank='C';flavor='まだ伸びしろがある';col='#eafffb';}
+    else{rank='D';flavor='訓練を続けよ';col='#ff8a1e';}
+  } else {
+    if(s>=9000){rank='SS';flavor='神域の反射神経';col='#ffd166';}
+    else if(s>=6500){rank='S';flavor='超人的な瞬発力';col='#ffd166';}
+    else if(s>=4200){rank='A';flavor='研ぎ澄まされた感覚';col='#2ff0d6';}
+    else if(s>=2600){rank='B';flavor='確かな手応え';col='#5ffff0';}
+    else if(s>=1300){rank='C';flavor='まだ伸びしろがある';col='#eafffb';}
+    else{rank='D';flavor='訓練を続けよ';col='#ff8a1e';}
+    isBest=s>best; if(isBest){best=s;saveBest();}
+  }
+  lastResult={rank,score:s,react,acc,combo:S.maxCombo,mode:MODE};
   const $=id=>document.getElementById(id);
   $('rank').textContent=rank;$('rank').style.color=col;$('rank').style.textShadow='0 0 50px '+col;
-  $('flavor').textContent=flavor; $('sScore').textContent=s.toLocaleString('en-US');
+  $('flavor').textContent=flavor;
+  $('sScore').textContent=(MODE==='zen'?S.hits:s).toLocaleString('en-US');
+  $('sScoreK').textContent=(MODE==='zen'?'TAPS':'SCORE');
   $('sCombo').textContent='x'+S.maxCombo; $('sReact').innerHTML=react!=null?react+'<small>ms</small>':'—';
   $('sAcc').innerHTML=acc+'<small>%</small>'; $('newBest').style.visibility=isBest?'visible':'hidden';
+  $('overH').textContent = MODE==='ta'?'TIME ATTACK':MODE==='zen'?'ZEN':'RESULT';
   if(!TEST) setTimeout(()=>{setState('over');body.classList.remove('cine');refreshBest();},700);
   else { setState('over'); }
 }
@@ -714,8 +780,8 @@ document.getElementById('shareBtn').addEventListener('click',async()=>{
   try{ await navigator.clipboard.writeText(txt); bigToast('COPIED','#2ff0d6'); }catch(e){ try{ window.prompt('コピーしてシェア',txt); }catch(_){} }
 });
 
-document.getElementById('startBtn').addEventListener('click',()=>{audioInit();startCountdown();});
-document.getElementById('retryBtn').addEventListener('click',()=>{audioInit();startCountdown();});
+document.getElementById('startBtn').addEventListener('click',()=>{audioInit();MODE=selMode;startCountdown();});
+document.getElementById('retryBtn').addEventListener('click',()=>{audioInit();MODE=selMode;startCountdown();});
 document.getElementById('homeBtn').addEventListener('click',()=>{setState('title');refreshBest();});
 
 /* ===== duel: networking (PeerJS) + VS logic ===== */
@@ -729,21 +795,23 @@ function openLobby(which){ setState('lobby');
 
 function bindConn(conn){ NET.conn=conn;
   conn.on('open',()=>{ NET.connected=true;
-    if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.dk=DIFFK; NET.schedule=buildSchedule(NET.seed,2000,DIFFK);
-      netSend({t:'seed',seed:NET.seed,dk:DIFFK}); lobbyStatus('接続完了！'); setTimeout(beginDuel,600); }
+    if(NET.role==='host'){ lobbyStatus('接続完了！'); if(!TEST) setTimeout(hostStartMatch,600); else hostStartMatch(); }
     else lobbyStatus('接続完了！開始を待っています'); });
   conn.on('data',onData);
   conn.on('close',()=>onPeerLost('相手が切断しました'));
   conn.on('error',()=>onPeerLost('通信エラー')); }
 function onData(d){ if(!d||typeof d!=='object')return;
-  if(d.t==='seed'){ NET.seed=d.seed; DIFFK=(d.dk&&TIERS[d.dk])?d.dk:DIFFK; NET.dk=DIFFK; setDiffUI(); NET.schedule=buildSchedule(d.seed,2000,DIFFK); lobbyStatus('開始します'); setTimeout(beginDuel,250); return; }
+  if(d.t==='seed'){ guestRecvSeed(d); return; }
   if(d.t==='st'){ NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.lives=d.l|0;NET.opp.alive=!!d.a; updVS(); return; }
-  if(d.t==='end'){ NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0); updVS(); maybeVSResult(); return; }
-  if(d.t==='rematch'){ if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK}); beginDuel(); } return; }
+  if(d.t==='rend'){ if((d.round|0)!==NET.round){ /* stale/next: accept latest */ }
+    NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0);
+    updVS(); resolveRound(); return; }
+  if(d.t==='atk'){ incomingAttack(); return; }
+  if(d.t==='rematch'){ if(NET.role==='host') hostStartMatch(); return; }
   if(d.t==='bye'){ onPeerLost('相手が退出しました'); } }
 function onPeerLost(reason){ NET.connected=false;
   if(document.body.dataset.state==='lobby'){ lobbyStatus(reason,true); return; }
-  if(NET.mode==='duel'){ NET.opp.done=true;NET.opp.alive=false;NET.oppLost=true; cue(reason); maybeVSResult(); } }
+  if(NET.mode==='duel'){ NET.oppLost=true; cue(reason); if(!TEST) setTimeout(showMatchResult,300); else showMatchResult(); } }
 
 function hostRoom(){ openLobby('host'); NET.role='host'; NET.oppLost=false;
   if(!window.Peer){ lobbyStatus('通信ライブラリを読み込めません（オンライン環境で再試行）',true); return; }
@@ -767,12 +835,49 @@ function connectRoom(){ const code=((document.getElementById('codeInput').value)
 function leaveDuel(){ try{netSend({t:'bye'});}catch(e){} try{if(NET.conn)NET.conn.close();}catch(e){}
   try{if(NET.peer)NET.peer.destroy();}catch(e){}
   NET.mode='solo';NET.conn=null;NET.peer=null;NET.connected=false;NET.schedule=null;NET.oppLost=false;
-  document.body.classList.remove('duel'); }
+  MODE=selMode; document.body.classList.remove('duel'); }
 
-function beginDuel(){ NET.mode='duel'; NET.me={done:false,score:0,combo:0,react:null};
-  NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null}; NET.oppLost=false;
+function hostStartMatch(){ NET.mode='duel'; MODE='ta'; NET.round=1; NET.myWins=0; NET.oppWins=0;
   document.getElementById('vsOpName').textContent=NET.oppName; document.body.classList.add('duel');
-  startCountdown(); updVS(); }
+  hostSendRoundSeed(); beginRound(); }
+function hostSendRoundSeed(){ NET.seed=NET.code+'-r'+NET.round+'-'+Date.now().toString(36); NET.dk=DIFFK;
+  NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK,round:NET.round}); }
+function hostNextRound(){ NET.round++; hostSendRoundSeed(); beginRound(); }
+function guestRecvSeed(d){ DIFFK=(d.dk&&TIERS[d.dk])?d.dk:DIFFK; NET.dk=DIFFK; setDiffUI();
+  NET.round=d.round||1; NET.seed=d.seed; NET.schedule=buildSchedule(d.seed,2000,DIFFK);
+  if(NET.round===1||NET.mode!=='duel'){ NET.mode='duel'; MODE='ta'; NET.myWins=0; NET.oppWins=0;
+    document.getElementById('vsOpName').textContent=NET.oppName; document.body.classList.add('duel'); }
+  lobbyStatus('開始します'); if(!TEST) setTimeout(beginRound,200); else beginRound(); }
+
+function beginRound(){ NET.roundResolved=false; NET.oppLost=NET.oppLost&&false;
+  NET.me={done:false,score:0,combo:0,react:null};
+  NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null};
+  updRoundTag(); startCountdown(); updVS(); }
+function finishRound(reason){
+  const react=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
+  NET.me={done:true,score:S.score,combo:S.maxCombo,react};
+  netSend({t:'rend',round:NET.round,s:S.score,c:S.maxCombo,r:react}); updVS();
+  if(!TEST) setTimeout(resolveRound,300); else resolveRound(); }
+function resolveRound(){ if(NET.roundResolved)return; if(!NET.me.done)return; if(!NET.opp.done&&!NET.oppLost)return;
+  NET.roundResolved=true;
+  let rwin=0;
+  if(NET.oppLost) rwin=1;
+  else if(NET.me.score>NET.opp.score) rwin=1;
+  else if(NET.me.score<NET.opp.score) rwin=-1;
+  if(rwin>0)NET.myWins++; else if(rwin<0)NET.oppWins++;
+  bigToast(rwin>0?'ROUND WIN':rwin<0?'ROUND LOSE':'DRAW', rwin>0?'#ffd166':rwin<0?'#9fb4b0':'#5ffff0');
+  if(rwin>0){sMile();doFlash(.4);} updRoundTag();
+  const matchOver = NET.myWins>=2 || NET.oppWins>=2 || NET.oppLost || NET.round>=3;
+  if(matchOver){ if(!TEST) setTimeout(showMatchResult,1300); else showMatchResult(); return; }
+  if(NET.role==='host'){ if(!TEST) setTimeout(hostNextRound,1600); else hostNextRound(); }
+  /* guest waits for next seed */ }
+
+function updRoundTag(){ const rt=document.getElementById('roundTag');
+  if(rt) rt.textContent='ROUND '+NET.round+'  /  '+NET.myWins+' - '+NET.oppWins; }
+function renderMatchPips(){ const el=document.getElementById('matchPips'); if(!el)return; el.innerHTML='';
+  for(let i=0;i<NET.myWins;i++){const d=document.createElement('div');d.className='mp me';el.appendChild(d);}
+  const sep=document.createElement('div');sep.style.width='10px';sep.style.opacity='.4';sep.textContent='·';el.appendChild(sep);
+  for(let i=0;i<NET.oppWins;i++){const d=document.createElement('div');d.className='mp op';el.appendChild(d);} }
 function updVS(){ if(NET.mode!=='duel')return; const mx=Math.max(S.score,NET.opp.score,1);
   document.getElementById('vsMeBar').style.width=(S.score/mx*100)+'%';
   document.getElementById('vsOpBar').style.width=(NET.opp.score/mx*100)+'%';
@@ -781,14 +886,15 @@ function updVS(){ if(NET.mode!=='duel')return; const mx=Math.max(S.score,NET.opp
   document.getElementById('vsOpRow').classList.toggle('dead',!NET.opp.alive);
   document.getElementById('vsMeSc').classList.toggle('vs-lead',S.score>=NET.opp.score);
   document.getElementById('vsOpSc').classList.toggle('vs-lead',NET.opp.score>S.score); }
-function maybeVSResult(){ if(NET.mode!=='duel'||!NET.me.done)return; if(!NET.opp.done&&!NET.oppLost)return; showVSResult(); }
-function showVSResult(){ if(document.body.dataset.state==='vs')return; const me=NET.me,op=NET.opp;
+function showMatchResult(){ if(document.body.dataset.state==='vs')return; const me=NET.me,op=NET.opp;
   let verdict,cls;
   if(NET.oppLost){verdict='相手切断';cls='draw';}
-  else if(me.score>op.score){verdict='WIN';cls='win';sMile();doFlash(.5);}
-  else if(me.score<op.score){verdict='LOSE';cls='lose';}
+  else if(NET.myWins>NET.oppWins){verdict='MATCH WIN';cls='win';sMile();doFlash(.5);}
+  else if(NET.myWins<NET.oppWins){verdict='MATCH LOSE';cls='lose';}
   else{verdict='DRAW';cls='draw';}
   const v=document.getElementById('verdict'); v.textContent=verdict; v.className='verdict '+cls;
+  document.getElementById('vsHdr').textContent='BEST OF 3  —  '+NET.myWins+' : '+NET.oppWins;
+  renderMatchPips();
   const $=id=>document.getElementById(id);
   $('vrMe').textContent=(me.score|0).toLocaleString('en-US'); $('vrOp').textContent=(op.score|0).toLocaleString('en-US');
   $('vrMeC').textContent='x'+(me.combo|0); $('vrOpC').textContent='x'+(op.combo|0);
@@ -800,7 +906,7 @@ document.getElementById('hostBtn').addEventListener('click',()=>{audioInit();hos
 document.getElementById('joinBtn').addEventListener('click',()=>{audioInit();joinRoom();});
 document.getElementById('connectBtn').addEventListener('click',()=>{audioInit();connectRoom();});
 document.getElementById('lobbyBack').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
-document.getElementById('vsRetryBtn').addEventListener('click',()=>{ if(NET.connected&&NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK}); beginDuel(); } else if(NET.connected){ netSend({t:'rematch'}); cue('相手(ホスト)の再戦を待っています'); } else { leaveDuel(); setState('title'); refreshBest(); } });
+document.getElementById('vsRetryBtn').addEventListener('click',()=>{ if(NET.connected&&NET.role==='host'){ hostStartMatch(); } else if(NET.connected){ netSend({t:'rematch'}); cue('相手(ホスト)の再戦を待っています'); } else { leaveDuel(); setState('title'); refreshBest(); } });
 document.getElementById('vsHomeBtn').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
 
 /* ===== difficulty selector ===== */
@@ -812,13 +918,27 @@ async function loadDiff(){ try{ if(window.storage){ const r=await window.storage
   if(r&&r.value&&TIERS[r.value])DIFFK=r.value; } }catch(e){} setDiffUI(); }
 async function saveDiff(){ try{ if(window.storage) await window.storage.set('setsuna_diff',DIFFK,false); }catch(e){} }
 
-/* boot */
-resize(); renderLives(); loadBest(); loadDiff(); requestAnimationFrame(frame);
+/* ===== mode selector ===== */
+function setModeUI(){ const sel=document.getElementById('modeSel'); if(!sel)return;
+  sel.querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.m===selMode)); }
+document.getElementById('modeSel').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+  selMode=b.dataset.m; MODE=selMode; setModeUI(); saveMode(); sBeep(false); });
+async function loadMode(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_mode',false);
+  if(r&&r.value&&MODES[r.value])selMode=r.value; } }catch(e){} MODE=selMode; setModeUI(); }
+async function saveMode(){ try{ if(window.storage) await window.storage.set('setsuna_mode',selMode,false); }catch(e){} }
 
-if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,
-  buildSchedule,seedHash,onData,updVS,maybeVSResult,showVSResult,
-  get NET(){return NET;}, get spawnCount(){return spawnCount;},
-  beginDuelTEST(seed,dk){ if(dk)DIFFK=dk; NET.schedule=buildSchedule(seed,2000,DIFFK); NET.seed=seed; beginDuel(); }, setDiff(dk){ if(TIERS[dk])DIFFK=dk; },
+/* boot */
+resize(); renderLives(); loadBest(); loadDiff(); loadMode(); requestAnimationFrame(frame);
+
+if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,endRun,
+  buildSchedule,seedHash,onData,updVS,resolveRound,finishRound,showMatchResult,showSoloResult,incomingAttack,
+  get NET(){return NET;}, get spawnCount(){return spawnCount;}, get MODE(){return MODE;}, get roundDur(){return roundDur;}, get runClock(){return runClock;},
+  setMode(m){ if(MODES[m]){selMode=m;MODE=m;} }, setDiff(dk){ if(TIERS[dk])DIFFK=dk; },
+  beginDuelTEST(seed,dk){ if(dk)DIFFK=dk; NET.mode='duel'; MODE='ta'; NET.round=1; NET.myWins=0; NET.oppWins=0;
+    NET.role='host'; NET.connected=true; NET.seed=seed; NET.schedule=buildSchedule(seed,2000,DIFFK);
+    NET.roundResolved=false; NET.me={done:false,score:0,combo:0,react:null};
+    NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null}; NET.oppLost=false;
+    document.body.classList.add('duel'); startCountdown(); updVS(); },
   get timeScale(){return timeScale;}, get arrowActive(){return arrowActive;}, setW(w,h){W=w;H=h;seedMotes();} }; }
 })();
 </script>
