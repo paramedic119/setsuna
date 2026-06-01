@@ -195,6 +195,21 @@
   .vs-table .me{color:var(--cyan);text-align:right;font-family:"Dela Gothic One";}
   .vs-table .op{color:var(--gold);text-align:left;font-family:"Dela Gothic One";}
   .vs-table .lab{font-size:10px;letter-spacing:.2em;color:var(--ink-dim);font-weight:700;}
+
+  .diff-sel{display:flex;gap:7px;margin:22px 0 2px;opacity:0;animation:fadeUp .8s .82s forwards;}
+  .diff-sel button{font-family:"Zen Kaku Gothic New";font-weight:700;cursor:pointer;border-radius:14px;
+    padding:9px 16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--ink-dim);
+    display:flex;flex-direction:column;align-items:center;gap:2px;min-width:78px;transition:.18s;}
+  .diff-sel button .dl{font-size:13px;letter-spacing:.12em;}
+  .diff-sel button .ds{font-size:9px;letter-spacing:.18em;opacity:.7;}
+  .diff-sel button:active{transform:scale(.95);}
+  .diff-sel button.sel{color:#06100f;border-color:transparent;background:linear-gradient(180deg,var(--cyan),var(--teal-d));
+    box-shadow:0 0 0 2px rgba(255,255,255,.25) inset,0 6px 22px rgba(47,240,214,.4);}
+  .diff-sel button[data-d="hard"].sel{background:linear-gradient(180deg,var(--gold),var(--orange));
+    box-shadow:0 0 0 2px rgba(255,255,255,.25) inset,0 6px 22px rgba(255,90,46,.5);}
+  .diff-sel button[data-d="normal"].sel{background:linear-gradient(180deg,#7fffe9,var(--teal-d));}
+  .diff-label{font-size:10px;letter-spacing:.35em;color:var(--ink-dim);font-weight:700;margin-bottom:-6px;
+    opacity:0;animation:fadeUp .8s .78s forwards;}
 </style>
 </head>
 <body data-state="title">
@@ -242,6 +257,12 @@
       <div class="rule"><div class="ic r2">✕</div><div class="t">AVOID</div><div class="d">赤は押すな</div></div>
       <div class="rule"><div class="ic r3">➤</div><div class="t">SWIPE</div><div class="d">矢印の方向へ</div></div>
     </div>
+    <div class="diff-label">DIFFICULTY</div>
+    <div class="diff-sel" id="diffSel">
+      <button data-d="easy"><span class="dl">EASY</span><span class="ds">入門</span></button>
+      <button data-d="normal"><span class="dl">NORMAL</span><span class="ds">標準</span></button>
+      <button data-d="hard"><span class="dl">HARD</span><span class="ds">極限</span></button>
+    </div>
     <button class="cta" id="startBtn">▶ START</button>
     <div class="alt-cta">
       <button id="hostBtn">⚔ 対戦ルーム作成</button>
@@ -283,6 +304,7 @@
       <div id="hostView" style="display:none;">
         <div class="hint" style="margin-top:0">このコードを相手に伝えてください</div>
         <div class="code-box" id="hostCode">····</div>
+        <div class="hint" style="margin-top:-4px">難易度 <b id="hostDiff" style="color:var(--teal)">NORMAL</b>（ホストの設定で対戦します）</div>
       </div>
       <div id="joinView" style="display:none;">
         <div class="lobby-row"><input class="code-in" id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters"></div>
@@ -357,18 +379,27 @@ const MAXP=240,MAXF=24;
 
 const ARROWS=[{k:'up',dx:0,dy:-1},{k:'down',dx:0,dy:1},{k:'left',dx:-1,dy:0},{k:'right',dx:1,dy:0}];
 
+/* ===== difficulty tiers (EASY = original tuning) ===== */
+const TIERS={
+  easy:   {lab:'EASY',   sub:'入門', spd:1.00, life:1.00, dens:1.00, haz:1.00},
+  normal: {lab:'NORMAL', sub:'標準', spd:1.24, life:0.82, dens:1.18, haz:1.28},
+  hard:   {lab:'HARD',   sub:'極限', spd:1.55, life:0.66, dens:1.40, haz:1.62}
+};
+let DIFFK='normal';
+function T(){ return TIERS[DIFFK]||TIERS.normal; }
+
 /* ===== deterministic RNG + schedule (duel) ===== */
 function mulberry32(a){ return function(){ a|=0;a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function seedHash(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
 function makeCode(){ const C='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let o=''; for(let i=0;i<4;i++)o+=C[(Math.random()*C.length)|0]; return o; }
 // Pure function of seed -> identical on both devices. Draws a fixed number of values per spawn to stay in sync.
-function buildSchedule(seed,n){ const r=mulberry32(seedHash(seed)); const out=[]; let arrowSim=false;
+function buildSchedule(seed,n,dk){ const r=mulberry32(seedHash(seed)); const tt=TIERS[dk]||TIERS.normal; const out=[]; let arrowSim=false;
   for(let k=0;k<n;k++){
-    const hazardP=k<4?0:Math.min(0.32,0.10+(k-4)*0.004);
-    const arrowP =k<8?0:Math.min(0.30,0.12+(k-8)*0.003);
-    const life   =Math.max(0.82,1.75-k*0.016);
-    const roll=r(),dirPick=(r()*4)|0,fx=r(),fy=r(),fspin=r(),jit=0.82+r()*0.34;   // always 6 draws
+    const hazardP=k<4?0:Math.min(0.46,(0.10+(k-4)*0.004)*tt.haz);
+    const arrowP =k<8?0:Math.min(0.42,(0.12+(k-8)*0.003)*tt.haz);
+    const life   =Math.max(0.55,(1.75-k*0.016)*tt.life);
+    const roll=r(),dirPick=(r()*4)|0,fx=r(),fy=r(),fspin=r(),jit=(0.82+r()*0.34)/tt.spd;   // always 6 draws
     let type='orb';
     if(roll<hazardP) type='hazard';
     else if(roll<hazardP+arrowP && !arrowSim) type='arrow';
@@ -384,12 +415,12 @@ const NET={mode:'solo',role:null,code:null,peer:null,conn:null,schedule:null,
 let spawnCount=0, lastNetTx=0;
 
 /* progressive intro + difficulty */
-function diff(){ const t=S.time; return {
-  interval:Math.max(0.32,1.05-t*0.018),
-  life:Math.max(0.82,1.75-t*0.013),
-  hazardP: t<5?0:Math.min(0.32,0.10+(t-5)*0.0030),
-  arrowP:  t<10?0:Math.min(0.30,0.12+(t-10)*0.0024),
-  maxLive:Math.min(6,2+Math.floor(t/9)) }; }
+function diff(){ const t=S.time, tt=T(); return {
+  interval:Math.max(0.20,(1.05-t*0.018)/tt.spd),
+  life:Math.max(0.55,(1.75-t*0.013)*tt.life),
+  hazardP: t<5?0:Math.min(0.46,(0.10+(t-5)*0.0030)*tt.haz),
+  arrowP:  t<10?0:Math.min(0.42,(0.12+(t-10)*0.0024)*tt.haz),
+  maxLive:Math.min(Math.round(6*tt.dens),2+Math.floor(t/9*tt.dens)) }; }
 
 function rnd(a,b){return a+Math.random()*(b-a);}
 function spawnTarget(){
@@ -630,7 +661,7 @@ function resetGame(){ targets.length=0;particles.length=0;floaters.length=0;
 function startCountdown(){ setState('play');body.classList.add('cine');resetGame();
   if(TEST){ S.alive=true; return; }
   let n=3; const tick=()=>{ if(n>0){bigToast(String(n),n===1?'#ffd166':'#2ff0d6');sBeep(false);n--;setTimeout(tick,650);}
-    else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue('輪が重なる瞬間にタップ');S.alive=true;last=0;} }; tick(); }
+    else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue((T().lab)+' — '+(NET.mode==='duel'?'対戦開始':'輪が重なる瞬間にタップ'));S.alive=true;last=0;} }; tick(); }
 function gameOver(){ S.alive=false;timeScaleTarget=1;shake=RM?8:22;doFlash(.6);sFail();
   const acc=S.orbHits>0?Math.round(S.orbPerfect/S.orbHits*100):0;
   const react=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
@@ -698,17 +729,17 @@ function openLobby(which){ setState('lobby');
 
 function bindConn(conn){ NET.conn=conn;
   conn.on('open',()=>{ NET.connected=true;
-    if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000);
-      netSend({t:'seed',seed:NET.seed}); lobbyStatus('接続完了！'); setTimeout(beginDuel,600); }
+    if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.dk=DIFFK; NET.schedule=buildSchedule(NET.seed,2000,DIFFK);
+      netSend({t:'seed',seed:NET.seed,dk:DIFFK}); lobbyStatus('接続完了！'); setTimeout(beginDuel,600); }
     else lobbyStatus('接続完了！開始を待っています'); });
   conn.on('data',onData);
   conn.on('close',()=>onPeerLost('相手が切断しました'));
   conn.on('error',()=>onPeerLost('通信エラー')); }
 function onData(d){ if(!d||typeof d!=='object')return;
-  if(d.t==='seed'){ NET.seed=d.seed; NET.schedule=buildSchedule(d.seed,2000); lobbyStatus('開始します'); setTimeout(beginDuel,250); return; }
+  if(d.t==='seed'){ NET.seed=d.seed; DIFFK=(d.dk&&TIERS[d.dk])?d.dk:DIFFK; NET.dk=DIFFK; setDiffUI(); NET.schedule=buildSchedule(d.seed,2000,DIFFK); lobbyStatus('開始します'); setTimeout(beginDuel,250); return; }
   if(d.t==='st'){ NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.lives=d.l|0;NET.opp.alive=!!d.a; updVS(); return; }
   if(d.t==='end'){ NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0); updVS(); maybeVSResult(); return; }
-  if(d.t==='rematch'){ if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000); netSend({t:'seed',seed:NET.seed}); beginDuel(); } return; }
+  if(d.t==='rematch'){ if(NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK}); beginDuel(); } return; }
   if(d.t==='bye'){ onPeerLost('相手が退出しました'); } }
 function onPeerLost(reason){ NET.connected=false;
   if(document.body.dataset.state==='lobby'){ lobbyStatus(reason,true); return; }
@@ -716,7 +747,9 @@ function onPeerLost(reason){ NET.connected=false;
 
 function hostRoom(){ openLobby('host'); NET.role='host'; NET.oppLost=false;
   if(!window.Peer){ lobbyStatus('通信ライブラリを読み込めません（オンライン環境で再試行）',true); return; }
-  NET.code=makeCode(); document.getElementById('hostCode').textContent=NET.code; lobbyStatus('コードを相手に伝えてください');
+  NET.code=makeCode(); document.getElementById('hostCode').textContent=NET.code;
+  { const hd=document.getElementById('hostDiff'); if(hd){ hd.textContent=T().lab; hd.style.color=DIFFK==='hard'?'var(--gold)':'var(--teal)'; } }
+  lobbyStatus('コードを相手に伝えてください');
   try{ NET.peer=new Peer('setsuna-'+NET.code,{debug:1});
     NET.peer.on('open',()=>lobbyStatus('相手の参加を待っています…'));
     NET.peer.on('connection',c=>{ lobbyStatus('接続中…'); bindConn(c); });
@@ -767,16 +800,25 @@ document.getElementById('hostBtn').addEventListener('click',()=>{audioInit();hos
 document.getElementById('joinBtn').addEventListener('click',()=>{audioInit();joinRoom();});
 document.getElementById('connectBtn').addEventListener('click',()=>{audioInit();connectRoom();});
 document.getElementById('lobbyBack').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
-document.getElementById('vsRetryBtn').addEventListener('click',()=>{ if(NET.connected&&NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000); netSend({t:'seed',seed:NET.seed}); beginDuel(); } else if(NET.connected){ netSend({t:'rematch'}); cue('相手(ホスト)の再戦を待っています'); } else { leaveDuel(); setState('title'); refreshBest(); } });
+document.getElementById('vsRetryBtn').addEventListener('click',()=>{ if(NET.connected&&NET.role==='host'){ NET.seed=NET.code+'-'+Date.now().toString(36); NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK}); beginDuel(); } else if(NET.connected){ netSend({t:'rematch'}); cue('相手(ホスト)の再戦を待っています'); } else { leaveDuel(); setState('title'); refreshBest(); } });
 document.getElementById('vsHomeBtn').addEventListener('click',()=>{leaveDuel();setState('title');refreshBest();});
 
+/* ===== difficulty selector ===== */
+function setDiffUI(){ const sel=document.getElementById('diffSel'); if(!sel)return;
+  sel.querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.d===DIFFK)); }
+document.getElementById('diffSel').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+  DIFFK=b.dataset.d; setDiffUI(); saveDiff(); sBeep(false); });
+async function loadDiff(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_diff',false);
+  if(r&&r.value&&TIERS[r.value])DIFFK=r.value; } }catch(e){} setDiffUI(); }
+async function saveDiff(){ try{ if(window.storage) await window.storage.set('setsuna_diff',DIFFK,false); }catch(e){} }
+
 /* boot */
-resize(); renderLives(); loadBest(); requestAnimationFrame(frame);
+resize(); renderLives(); loadBest(); loadDiff(); requestAnimationFrame(frame);
 
 if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,
   buildSchedule,seedHash,onData,updVS,maybeVSResult,showVSResult,
   get NET(){return NET;}, get spawnCount(){return spawnCount;},
-  beginDuelTEST(seed){ NET.schedule=buildSchedule(seed,2000); NET.seed=seed; beginDuel(); },
+  beginDuelTEST(seed,dk){ if(dk)DIFFK=dk; NET.schedule=buildSchedule(seed,2000,DIFFK); NET.seed=seed; beginDuel(); }, setDiff(dk){ if(TIERS[dk])DIFFK=dk; },
   get timeScale(){return timeScale;}, get arrowActive(){return arrowActive;}, setW(w,h){W=w;H=h;seedMotes();} }; }
 })();
 </script>
