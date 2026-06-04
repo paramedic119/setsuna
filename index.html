@@ -92,6 +92,7 @@
   body[data-state="over"] #over{display:flex;}
   body[data-state="pause"] #pause{display:flex;}
   body[data-state="lobby"] #lobby{display:flex;}
+  body[data-state="board"] #board{display:flex;}
 
   .kicker{font-size:11px;letter-spacing:.7em;color:var(--teal);font-weight:700;text-indent:.7em;opacity:0;animation:fadeUp .8s .15s forwards;}
   .logo{font-family:"Dela Gothic One";font-size:clamp(78px,27vw,180px);line-height:.86;
@@ -223,6 +224,26 @@
   .match-pips .mp.me{background:var(--cyan);box-shadow:0 0 10px var(--teal);}
   .match-pips .mp.op{background:var(--gold);box-shadow:0 0 10px var(--amber);}
   .round-tag{font-size:11px;letter-spacing:.3em;color:var(--ink-dim);font-weight:700;}
+
+  .board-tabs{display:flex;gap:6px;justify-content:center;margin:8px 0;}
+  .board-tabs button{font-family:"Zen Kaku Gothic New";font-weight:700;font-size:12px;letter-spacing:.06em;cursor:pointer;
+    padding:8px 14px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--ink-dim);}
+  .board-tabs button.sel{color:#06100f;border-color:transparent;background:linear-gradient(180deg,var(--cyan),var(--teal-d));}
+  .board-tabs button:active{transform:scale(.95);}
+  .board-list{width:min(440px,92vw);max-height:48vh;overflow-y:auto;margin-top:10px;
+    border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.03);}
+  .board-row{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;padding:10px 14px;
+    border-bottom:1px solid rgba(255,255,255,.05);font-size:14px;}
+  .board-row:last-child{border-bottom:none;}
+  .board-row .rk{font-family:"Dela Gothic One";font-size:14px;color:var(--ink-dim);}
+  .board-row.top1 .rk{color:var(--gold);} .board-row.top2 .rk{color:#dfe9e6;} .board-row.top3 .rk{color:#ff9d5c;}
+  .board-row .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .board-row .vl{font-family:"Dela Gothic One";color:var(--cyan);font-size:14px;}
+  .board-empty{padding:26px;text-align:center;color:var(--ink-dim);font-size:13px;}
+  .name-wrap{display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0 2px;opacity:0;animation:fadeUp .8s .7s forwards;}
+  .name-wrap label{font-size:10px;letter-spacing:.3em;color:var(--ink-dim);font-weight:700;}
+  .name-in{font-family:"Zen Kaku Gothic New";font-weight:700;font-size:14px;text-align:center;width:160px;padding:8px 10px;
+    border-radius:11px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:var(--ink);}
 </style>
 </head>
 <body data-state="title">
@@ -284,10 +305,17 @@
       <button data-d="normal"><span class="dl">NORMAL</span><span class="ds">標準</span></button>
       <button data-d="hard"><span class="dl">HARD</span><span class="ds">極限</span></button>
     </div>
+    <div class="name-wrap" id="nameWrap" style="display:none;">
+      <label>NAME</label><input class="name-in" id="nameInput" maxlength="16" placeholder="あなたの名前" autocomplete="off">
+    </div>
     <button class="cta" id="startBtn">▶ START</button>
     <div class="alt-cta">
       <button id="hostBtn">⚔ 対戦ルーム作成</button>
       <button id="joinBtn">🔗 コードで参加</button>
+    </div>
+    <div class="alt-cta" style="animation-delay:1s;margin-top:8px;">
+      <button id="tutBtn">📖 遊び方（チュートリアル）</button>
+      <button id="rankBtn" style="display:none;">🏆 ランキング</button>
     </div>
     <div class="best" id="titleBest"></div>
   </section>
@@ -306,8 +334,10 @@
     <div class="over-btns">
       <button class="btn2 primary" id="retryBtn">↻ もう一度</button>
       <button class="btn2" id="shareBtn">⤴ シェア</button>
+      <button class="btn2" id="lbBtn" style="display:none;">🏆 ランキング</button>
       <button class="btn2" id="homeBtn">HOME</button>
     </div>
+    <div class="best" id="subNote" style="margin-top:14px;min-height:14px;"></div>
   </section>
 
   <section class="screen" id="pause">
@@ -352,11 +382,40 @@
     </div>
   </section>
 
+  <section class="screen" id="board">
+    <div class="lobby-h" style="font-size:clamp(28px,8vw,46px)">🏆 ランキング</div>
+    <div class="lobby-sub" id="boardSub">WORLD LEADERBOARD</div>
+    <div class="board-tabs" id="boardModeTabs">
+      <button data-m="survival" class="sel">耐久</button>
+      <button data-m="ta">タイム</button>
+      <button data-m="zen">禅</button>
+    </div>
+    <div class="board-tabs" id="boardDiffTabs">
+      <button data-d="easy">EASY</button>
+      <button data-d="normal" class="sel">NORMAL</button>
+      <button data-d="hard">HARD</button>
+    </div>
+    <div class="board-list" id="boardList"><div class="board-empty">読み込み中…</div></div>
+    <div class="lobby-row" style="margin-top:16px;"><button class="btn2" id="boardBack">← 戻る</button></div>
+  </section>
+
   <div class="credit">刹那 — 反射の極限</div>
 
 <script>
 (function(){
 "use strict";
+
+/* ============================================================
+   ★ ランキング設定 (Supabase) ★
+   オンライン世界ランキングを使うには、下の2つを自分の値に置き換えてください。
+   1) Supabase でプロジェクトを作成
+   2) 下記 README の SQL を実行して scores テーブルを作成
+   3) Project Settings > API から URL と anon public key をコピーして貼る
+   ※ 空のままでもゲームは動作し、ランキングは「自己ベストのみ」表示になります。
+   ============================================================ */
+const SUPABASE_URL = "https://cvpggxftatwakfymjidc.supabase.co";        // 例: "https://abcd1234.supabase.co"
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2cGdneGZ0YXR3YWtmeW1qaWRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MTU0OTksImV4cCI6MjA5NjA5MTQ5OX0.YuXhbLg-W_ufbMtZvPZ_GECEtoimoomu8LTvFmJK42o";   // 例: "eyJhbGci..."（anon public キー）
+const LB_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 const TEST = !!(typeof window!=='undefined' && window.__TEST__);
 const RM = (function(){ try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
@@ -370,17 +429,21 @@ function resize(){ DPR=Math.min(window.devicePixelRatio||1,2.5); W=window.innerW
 window.addEventListener('resize',resize);
 
 /* ===== audio ===== */
-let AC=null,master=null,muted=false;
+let AC=null,master=null,muted=false,musicBus=null,musicFilter=null,sfxBus=null;
 function audioInit(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
-  master=AC.createGain(); master.gain.value=muted?0:0.8; master.connect(AC.destination);} if(AC.state==='suspended')AC.resume(); }
+  master=AC.createGain(); master.gain.value=muted?0:0.8; master.connect(AC.destination);
+  sfxBus=AC.createGain(); sfxBus.gain.value=1; sfxBus.connect(master);
+  musicFilter=AC.createBiquadFilter(); musicFilter.type='lowpass'; musicFilter.frequency.value=14000; musicFilter.Q.value=0.7;
+  musicBus=AC.createGain(); musicBus.gain.value=0; musicBus.connect(musicFilter); musicFilter.connect(master);
+  } if(AC.state==='suspended')AC.resume(); }
 function tone(freq,dur,type,gain,slideTo){ if(!AC||muted)return; const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
   o.type=type||'sine'; o.frequency.setValueAtTime(freq,t); if(slideTo)o.frequency.exponentialRampToValueAtTime(Math.max(40,slideTo),t+dur);
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gain||0.2,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02); }
+  o.connect(g); g.connect(sfxBus||master); o.start(t); o.stop(t+dur+0.02); }
 function noise(dur,gain,cut){ if(!AC||muted)return; const t=AC.currentTime,n=Math.floor(AC.sampleRate*dur);
   const buf=AC.createBuffer(1,n,AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
   const s=AC.createBufferSource(); s.buffer=buf; const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut||1200;
-  const g=AC.createGain(); g.gain.value=gain||0.3; s.connect(f); f.connect(g); g.connect(master); s.start(t); }
+  const g=AC.createGain(); g.gain.value=gain||0.3; s.connect(f); f.connect(g); g.connect(sfxBus||master); s.start(t); }
 const sHitPerfect=c=>{tone(520+Math.min(c,40)*22,.14,'triangle',.22);tone(1040+Math.min(c,40)*30,.09,'sine',.10);};
 const sHitGood=()=>tone(360,.12,'triangle',.16,300);
 const sSwipe=()=>tone(680,.12,'sawtooth',.12,1100);
@@ -390,12 +453,51 @@ const sFocus=()=>{tone(300,.5,'sine',.18,900);tone(450,.5,'triangle',.10,1400);}
 const sBeep=hi=>tone(hi?880:520,.16,'square',.14);
 const sMile=()=>{tone(523,.3,'triangle',.16);tone(659,.3,'triangle',.14);tone(784,.4,'triangle',.14);};
 
+/* ===== dynamic music (synthesized layers; intensity follows combo) ===== */
+const MUSIC={on:false,step16:0,nextT:0,bpm:96};
+const SCALE=[0,3,5,7,10,12,15];   // minor pentatonic-ish, moody
+const BASSROOT=55;                // A1
+function mNote(freq,dur,type,gain,dest){ if(!AC||muted)return; const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
+  o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gain,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g); g.connect(dest||musicBus); o.start(t); o.stop(t+dur+0.02); }
+function mKick(){ if(!AC||muted)return; const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(48,t+0.12);
+  g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16); o.connect(g); g.connect(musicBus); o.start(t); o.stop(t+0.18); }
+function mHat(){ if(!AC||muted)return; noiseInto(0.03,0.10,8000,musicBus); }
+function noiseInto(dur,gain,cut,dest){ const t=AC.currentTime,n=Math.floor(AC.sampleRate*dur),buf=AC.createBuffer(1,n,AC.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1); const s=AC.createBufferSource();s.buffer=buf;
+  const f=AC.createBiquadFilter();f.type='highpass';f.frequency.value=cut;const g=AC.createGain();g.gain.value=gain;
+  s.connect(f);f.connect(g);g.connect(dest);s.start(t); }
+function musicStart(){ if(!AC||MUSIC.on)return; MUSIC.on=true; MUSIC.step16=0; MUSIC.nextT=AC.currentTime+0.06;
+  if(musicBus) musicBus.gain.setTargetAtTime(0.5,AC.currentTime,0.4); }
+function musicStop(){ if(!AC||!MUSIC.on)return; MUSIC.on=false; if(musicBus) musicBus.gain.setTargetAtTime(0,AC.currentTime,0.3); }
+function musicTick(){ if(!AC||!MUSIC.on||muted)return;
+  const it=intensity();                          // 0..1 from combo
+  MUSIC.bpm=96+Math.round(it*44);                // 96 -> 140 bpm
+  const spb=60/MUSIC.bpm, sixteenth=spb/4;
+  // FOCUS = underwater lowpass
+  if(musicFilter){ const target=S.focusActive>0?500:(6000+it*8000); musicFilter.frequency.setTargetAtTime(target,AC.currentTime,0.12); }
+  while(AC.currentTime+0.10>=MUSIC.nextT){
+    const s=MUSIC.step16%16, bar=Math.floor(MUSIC.step16/16);
+    // kick on 0,4,8,12 ; extra syncopation as intensity grows
+    if(s%4===0) mKick(); else if(it>0.5 && s%4===2 && (s/2)%2===0) mKick();
+    // hats from layer 1
+    if(it>0.15 && s%2===0) mHat(); if(it>0.7) mHat();
+    // bassline every quarter
+    if(s%4===0){ const deg=SCALE[(bar+ (s===8?2:0))%SCALE.length]; mNote(BASSROOT*Math.pow(2,deg/12),spb*0.9,'sawtooth',0.16); }
+    // arpeggio layer when intensity high
+    if(it>0.4 && s%2===0){ const deg=SCALE[(s/2)%SCALE.length]; mNote(BASSROOT*4*Math.pow(2,deg/12),sixteenth*1.6,'square',0.05+it*0.05); }
+    if(it>0.8 && s%4===1){ const deg=SCALE[(s)%SCALE.length]; mNote(BASSROOT*8*Math.pow(2,deg/12),sixteenth*1.2,'triangle',0.04); }
+    MUSIC.step16++; MUSIC.nextT+=sixteenth;
+  }
+}
+
 /* ===== state ===== */
 const S={time:0,score:0,combo:0,maxCombo:0,lives:3,maxLives:3,focus:0,focusActive:0,
   alive:false,paused:false,orbHits:0,orbPerfect:0,hits:0,reactSum:0,reactN:0,hazardSeen:false,arrowSeen:false};
 let best=0;
 const targets=[],particles=[],floaters=[],motes=[];
-let spawnT=0,timeScale=1,timeScaleTarget=1,shake=0,arrowActive=false;
+let spawnT=0,timeScale=1,timeScaleTarget=1,shake=0,arrowActive=false,hitstop=0;
 const pointers=new Map();
 const MAXP=240,MAXF=24;
 
@@ -532,6 +634,13 @@ function tapAt(x,y){
   let b=null,bd=1e9;
   for(const t of targets){ if(t.resolved||(t.type!=='orb'&&t.type!=='hazard'))continue;
     const dist=Math.hypot(t.x-x,t.y-y), reach=t.r*2.4+18; if(dist<=reach&&dist<bd){bd=dist;b=t;} }
+  if(S.tut){
+    if(b&&b.type==='orb'){ b.resolved=true;b.dead=true; ring(b.x,b.y,'#ffd166',b.r,b.r*4); burst(b.x,b.y,'#ffd166',18,360);
+      floatText(b.x,b.y-26,'★ PERFECT','#ffd166'); sHitPerfect(6); doFlash(.4); vibrate(18); tutHit('orb'); return true; }
+    if(b&&b.type==='hazard'){ // pressing the hazard in lesson: gentle correction, no damage
+      shake=Math.max(shake,8); sFail(); floatText(b.x,b.y-30,'押すな！','#ff6a3d'); cue('赤は押さない — もう一度'); return true; }
+    return false;
+  }
   if(!b) return false;
   if(b.type==='hazard'){ b.resolved=true;b.dead=true; loseLife(b.x,b.y); floatText(b.x,b.y-30,'BURNED','#ff6a3d'); return true; }
   b.resolved=true;b.dead=true; S.orbHits++;
@@ -543,12 +652,16 @@ function tapAt(x,y){
   ring(b.x,b.y,col,b.r,b.r*3.4); burst(b.x,b.y,col,18,360);
   if(grade==='PERFECT') ring(b.x,b.y,'#ffffff',b.r,b.r*5.2);
   floatText(b.x,b.y-26,(grade==='PERFECT'?'★ ':'')+grade,col);
-  if(grade==='PERFECT'){sHitPerfect(S.combo);doFlash(.5);vibrate(18);}else{sHitGood();vibrate(10);}
+  if(grade==='PERFECT'){sHitPerfect(S.combo);doFlash(.5);vibrate(18);hitstop=Math.max(hitstop,RM?0:0.05);}else{sHitGood();vibrate(10);}
   updFocus(); return true;
 }
 function swipeDir(dir){
   let a=null; for(const t of targets){ if(t.type==='arrow'&&!t.resolved){a=t;break;} }
   if(!a) return;
+  if(S.tut){ if(dir===a.dir.k){ a.resolved=true;a.dead=true;arrowActive=false;
+      burst(a.x,a.y,'#ffd166',20,420); ring(a.x,a.y,'#ffd166',a.r,a.r*3); floatText(a.x,a.y-40,'✓','#ffd166'); sSwipe(); vibrate(12); tutHit('arrow'); }
+    else { cue('矢印の向きへ — もう一度'); sFail(); }
+    return; }
   if(dir===a.dir.k){ a.resolved=true;a.dead=true;arrowActive=false;
     const ms=Math.round(a.age*1000); S.reactSum+=ms;S.reactN++;
     const sb=Math.max(0,1-a.age/a.life); addScore((60+sb*60)*comboMult()); bumpCombo(); S.hits++;
@@ -626,6 +739,10 @@ function step(rdt){
   if(roundDur>0){ runClock+=rdt; updClock(); if(runClock>=roundDur){ endRun('time'); return; } }
   else if(MODE==='zen') updClock();
   if(S.focusActive>0){ S.focusActive-=rdt; if(S.focusActive<=0){S.focusActive=0;timeScaleTarget=1;updFocus();} }
+  if(S.tut){
+    // tutorial: no spawning, no expiry, gentle pulsing ring; just animate spin/age cosmetically
+    for(const t of targets){ if(t.resolved)continue; t.age+=dt*0.0; if(t.spin!=null)t.spin+=dt; }
+  } else {
   spawnT-=dt; const d=diff(), active=targets.filter(t=>!t.resolved).length;
   if(spawnT<=0&&active<d.maxLive){
     if(NET.mode==='duel'){ const k=spawnCount; spawnFromSchedule(); const e=NET.schedule[Math.min(k,NET.schedule.length-1)]; spawnT=d.interval*((e&&e.jit)||1); }
@@ -635,6 +752,7 @@ function step(rdt){
       if(t.type==='orb'){loseLife(t.x,t.y);floatText(t.x,t.y-26,'MISS','#ff6a3d');}
       else if(t.type==='arrow'){arrowActive=false;loseLife(t.x,t.y);floatText(t.x,t.y-40,'TOO SLOW','#ff6a3d');}
       else{ addScore(20*comboMult()); bumpCombo(); S.hits++; ring(t.x,t.y,'#1de3c6',t.r,t.r*2.4); sAvoid(); floatText(t.x,t.y-26,'SAFE','#2ff0d6'); } } }
+  }
   for(let i=targets.length-1;i>=0;i--) if(targets[i].dead) targets.splice(i,1);
   for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=rdt/p.max;
     if(p.ring) p.r+=(p.r1-p.r)*Math.min(1,rdt*10); else{ p.x+=p.vx*rdt;p.y+=p.vy*rdt;p.vx*=0.92;p.vy*=0.92; }
@@ -723,7 +841,10 @@ function drawArrowEdge(t){ ctx.save();ctx.globalAlpha=0.3+0.25*Math.sin(t.age*8)
   if(t.dir.k==='left')ctx.fillRect(0,0,th,H); if(t.dir.k==='right')ctx.fillRect(W-th,0,th,H); ctx.restore(); }
 
 let last=0;
-function frame(now){ if(!last)last=now; let rdt=(now-last)/1000; last=now; step(rdt); render(); requestAnimationFrame(frame); }
+function frame(now){ if(!last)last=now; let rdt=(now-last)/1000; last=now;
+  musicTick();
+  if(hitstop>0){ hitstop=Math.max(0,hitstop-rdt); render(); requestAnimationFrame(frame); return; }
+  step(rdt); render(); requestAnimationFrame(frame); }
 
 /* ===== flow ===== */
 const body=document.body;
@@ -737,14 +858,15 @@ function startCountdown(){
   roundDur = (NET.mode==='duel') ? DUEL_DUR : ((MODES[MODE]&&MODES[MODE].dur)||0);
   body.classList.toggle('zen',MODE==='zen'&&NET.mode!=='duel');
   document.getElementById('scoreLabel').textContent = (MODE==='zen'&&NET.mode!=='duel')?'TAPS':'SCORE';
-  setState('play');body.classList.add('cine');resetGame(); updClock();
+  setState('play');body.classList.add('cine');resetGame(); updClock(); hitstop=0;
   if(TEST){ S.alive=true; return; }
+  musicStart();
   const modeCue = NET.mode==='duel' ? ('対戦 R'+NET.round+' / '+DUEL_DUR+'秒')
     : MODE==='ta' ? (MODES.ta.dur+'秒 タイムアタック') : MODE==='zen' ? '禅 — 反応速度を磨け' : '輪が重なる瞬間にタップ';
   let n=3; const tick=()=>{ if(n>0){bigToast(String(n),n===1?'#ffd166':'#2ff0d6');sBeep(false);n--;setTimeout(tick,650);}
     else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue((T().lab)+' — '+modeCue);S.alive=true;last=0;} }; tick(); }
 function gameOver(){ endRun('dead'); }
-function endRun(reason){ if(!S.alive)return; S.alive=false; timeScaleTarget=1; shake=RM?8:22; doFlash(.6);
+function endRun(reason){ if(!S.alive)return; S.alive=false; timeScaleTarget=1; shake=RM?8:22; doFlash(.6); musicStop();
   if(reason==='dead') sFail(); else sMile();
   if(NET.mode==='duel'){ finishRound(reason); return; }
   showSoloResult(reason); }
@@ -769,7 +891,7 @@ function showSoloResult(reason){
     else{rank='D';flavor='訓練を続けよ';col='#ff8a1e';}
     isBest=s>best; if(isBest){best=s;saveBest();}
   }
-  lastResult={rank,score:s,react,acc,combo:S.maxCombo,mode:MODE};
+  lastResult={rank,score:s,react,acc,combo:S.maxCombo,mode:MODE,diff:DIFFK};
   const $=id=>document.getElementById(id);
   $('rank').textContent=rank;$('rank').style.color=col;$('rank').style.textShadow='0 0 50px '+col;
   $('flavor').textContent=flavor;
@@ -778,6 +900,11 @@ function showSoloResult(reason){
   $('sCombo').textContent='x'+S.maxCombo; $('sReact').innerHTML=react!=null?react+'<small>ms</small>':'—';
   $('sAcc').innerHTML=acc+'<small>%</small>'; $('newBest').style.visibility=isBest?'visible':'hidden';
   $('overH').textContent = MODE==='ta'?'TIME ATTACK':MODE==='zen'?'ZEN':'RESULT';
+  // leaderboard submit (online only; non-blocking)
+  const lbBtn=document.getElementById('lbBtn'); if(lbBtn) lbBtn.style.display=LB_ENABLED?'inline-flex':'none';
+  if(LB_ENABLED && !TEST){ const submitNote=document.getElementById('subNote'); if(submitNote)submitNote.textContent='ランキングに送信中…';
+    submitScore(lastResult).then(rr=>{ if(submitNote)submitNote.textContent=(rr&&rr.ok)?'✓ ランキングに登録しました':'送信に失敗（オフライン？）'; }); }
+  else { const submitNote=document.getElementById('subNote'); if(submitNote)submitNote.textContent=''; }
   if(!TEST) setTimeout(()=>{setState('over');body.classList.remove('cine');refreshBest();},700);
   else { setState('over'); }
 }
@@ -785,11 +912,11 @@ let lastResult=null;
 function refreshBest(){ const tb=document.getElementById('titleBest'); tb.textContent=best>0?('BEST  '+best.toLocaleString('en-US')):''; }
 
 /* pause */
-function pauseGame(){ if(!S.alive||S.paused)return; S.paused=true; setState('pause'); }
-function resumeGame(){ if(!S.paused)return; S.paused=false; setState('play'); last=0; }
+function pauseGame(){ if(!S.alive||S.paused)return; S.paused=true; setState('pause'); musicStop(); }
+function resumeGame(){ if(!S.paused)return; S.paused=false; setState('play'); last=0; musicStart(); }
 document.getElementById('pauseBtn').addEventListener('pointerdown',e=>{e.stopPropagation();pauseGame();});
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
-document.getElementById('quitBtn').addEventListener('click',()=>{S.paused=false;S.alive=false;if(NET.mode==='duel')leaveDuel();setState('title');body.classList.remove('cine');refreshBest();});
+document.getElementById('quitBtn').addEventListener('click',()=>{S.paused=false;S.alive=false;musicStop();if(NET.mode==='duel')leaveDuel();setState('title');body.classList.remove('cine');refreshBest();});
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.alive&&!S.paused) pauseGame(); else if(!document.hidden) last=0; });
 
 /* mute */
@@ -801,6 +928,34 @@ muteBtn.addEventListener('pointerdown',e=>{ e.stopPropagation(); muted=!muted; m
 async function loadBest(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_best',false); if(r&&r.value)best=parseInt(r.value,10)||0; } }catch(e){} refreshBest(); }
 async function saveBest(){ try{ if(window.storage) await window.storage.set('setsuna_best',String(best),false); }catch(e){} }
 
+/* ===== online leaderboard (Supabase REST) ===== */
+let playerName='';
+async function loadName(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_name',false); if(r&&r.value)playerName=r.value; } }catch(e){} }
+async function saveName(){ try{ if(window.storage) await window.storage.set('setsuna_name',playerName,false); }catch(e){} }
+function lbKey(mode,diff){ return mode+'|'+diff; }
+// category for ranking: zen ranks by reaction (lower better), others by score (higher better)
+function submitScore(res){
+  if(!LB_ENABLED) return Promise.resolve({skipped:true});
+  // basic sanity clamp to discourage absurd values
+  const score=Math.max(0,Math.min(9999999,res.score|0));
+  const react=res.react==null?null:Math.max(80,Math.min(5000,res.react|0));
+  const row={ name:(playerName||'匿名').slice(0,16), score, mode:res.mode||'survival', diff:res.diff||'normal',
+    react, combo:Math.max(0,Math.min(99999,res.combo|0)) };
+  return fetch(SUPABASE_URL+'/rest/v1/scores',{ method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Prefer':'return=minimal'},
+    body:JSON.stringify(row) }).then(r=>({ok:r.ok,status:r.status})).catch(e=>({ok:false,err:String(e)}));
+}
+function fetchTop(mode,diff,zen){
+  if(!LB_ENABLED) return Promise.resolve(null);
+  const order = zen ? 'react.asc' : 'score.desc';
+  const extra = zen ? '&react=not.is.null' : '';
+  const url=SUPABASE_URL+'/rest/v1/scores?select=name,score,react,combo,created_at'
+    +'&mode=eq.'+encodeURIComponent(mode)+'&diff=eq.'+encodeURIComponent(diff)+extra
+    +'&order='+order+'&limit=20';
+  return fetch(url,{ headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY} })
+    .then(r=>r.ok?r.json():null).catch(()=>null);
+}
+
 /* share */
 document.getElementById('shareBtn').addEventListener('click',async()=>{
   if(!lastResult)return; const r=lastResult;
@@ -810,9 +965,45 @@ document.getElementById('shareBtn').addEventListener('click',async()=>{
   try{ await navigator.clipboard.writeText(txt); bigToast('COPIED','#2ff0d6'); }catch(e){ try{ window.prompt('コピーしてシェア',txt); }catch(_){} }
 });
 
-document.getElementById('startBtn').addEventListener('click',()=>{audioInit();MODE=selMode;startCountdown();});
+document.getElementById('startBtn').addEventListener('click',()=>{audioInit(); if(!tutDone){ tutStart(); return; } MODE=selMode;startCountdown();});
+document.getElementById('tutBtn').addEventListener('click',()=>{audioInit();tutStart();});
 document.getElementById('retryBtn').addEventListener('click',()=>{audioInit();MODE=selMode;startCountdown();});
 document.getElementById('homeBtn').addEventListener('click',()=>{setState('title');refreshBest();});
+
+/* ===== leaderboard UI ===== */
+const BOARD={mode:'survival',diff:'normal'};
+function openBoard(mode,diff){ if(mode)BOARD.mode=mode; if(diff)BOARD.diff=diff;
+  setState('board'); syncBoardTabs(); renderBoard(); }
+function syncBoardTabs(){
+  document.querySelectorAll('#boardModeTabs button').forEach(b=>b.classList.toggle('sel',b.dataset.m===BOARD.mode));
+  document.querySelectorAll('#boardDiffTabs button').forEach(b=>b.classList.toggle('sel',b.dataset.d===BOARD.diff)); }
+function renderBoard(){ const list=document.getElementById('boardList'); const zen=BOARD.mode==='zen';
+  document.getElementById('boardSub').textContent=zen?'反応速度ランキング（速い順）':'スコアランキング（高い順）';
+  if(!LB_ENABLED){ list.innerHTML='<div class="board-empty">オンラインランキングは未設定です。<br>index.html の SUPABASE_URL / KEY を設定すると有効になります。</div>'; return; }
+  list.innerHTML='<div class="board-empty">読み込み中…</div>';
+  fetchTop(BOARD.mode,BOARD.diff,zen).then(rows=>{
+    if(!rows){ list.innerHTML='<div class="board-empty">読み込みに失敗しました（オフライン？）</div>'; return; }
+    if(!rows.length){ list.innerHTML='<div class="board-empty">まだ記録がありません。<br>最初の挑戦者になろう！</div>'; return; }
+    list.innerHTML=''; rows.forEach((r,i)=>{ const div=document.createElement('div');
+      div.className='board-row'+(i<3?(' top'+(i+1)):'');
+      const val=zen?((r.react!=null?r.react:'—')+'ms'):(Number(r.score).toLocaleString('en-US'));
+      const nm=(r.name||'匿名').replace(/[<>&]/g,'');
+      div.innerHTML='<div class="rk">'+(i+1)+'</div><div class="nm">'+nm+'</div><div class="vl">'+val+'</div>';
+      list.appendChild(div); });
+  });
+}
+document.getElementById('boardModeTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;BOARD.mode=b.dataset.m;syncBoardTabs();renderBoard();});
+document.getElementById('boardDiffTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;BOARD.diff=b.dataset.d;syncBoardTabs();renderBoard();});
+document.getElementById('boardBack').addEventListener('click',()=>{setState('title');refreshBest();});
+document.getElementById('rankBtn').addEventListener('click',()=>{openBoard(selMode,DIFFK);});
+document.getElementById('lbBtn').addEventListener('click',()=>{ const m=(lastResult&&lastResult.mode)||selMode,d=(lastResult&&lastResult.diff)||DIFFK; openBoard(m,d); });
+// name field
+const nameInput=document.getElementById('nameInput');
+if(nameInput){ nameInput.addEventListener('input',()=>{ playerName=nameInput.value.slice(0,16); });
+  nameInput.addEventListener('blur',saveName); }
+function refreshLBUI(){ const show=LB_ENABLED; const nw=document.getElementById('nameWrap'),rb=document.getElementById('rankBtn');
+  if(nw)nw.style.display=show?'flex':'none'; if(rb)rb.style.display=show?'inline-flex':'none';
+  if(nameInput)nameInput.value=playerName; }
 
 /* ===== duel: networking (PeerJS) + VS logic ===== */
 function netSend(msg){ try{ if(NET.conn&&NET.conn.open) NET.conn.send(msg); }catch(e){} }
@@ -958,10 +1149,55 @@ async function loadMode(){ try{ if(window.storage){ const r=await window.storage
 async function saveMode(){ try{ if(window.storage) await window.storage.set('setsuna_mode',selMode,false); }catch(e){} }
 
 /* boot */
-resize(); renderLives(); loadBest(); loadDiff(); loadMode(); requestAnimationFrame(frame);
+/* ===== tutorial (first-run guided steps) ===== */
+let tutDone=false;
+const TUT={on:false,step:0,await:false};
+const TUT_STEPS=[
+  {type:'orb',  title:'TAP',  msg:'光の輪が重なる瞬間にタップ',  sub:'タイミングがすべて'},
+  {type:'hazard',title:'AVOID',msg:'赤いトゲは絶対に押すな',     sub:'触れずにやり過ごせ'},
+  {type:'arrow',title:'SWIPE',msg:'矢印の向きにスワイプ',        sub:'反応速度が試される'}
+];
+async function loadTut(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_tut',false); if(r&&r.value==='1')tutDone=true; } }catch(e){} updTutBtn(); }
+async function saveTut(){ try{ if(window.storage) await window.storage.set('setsuna_tut','1',false); }catch(e){} }
+function updTutBtn(){ const b=document.getElementById('tutBtn'); if(b)b.style.display=tutDone?'inline-flex':'inline-flex'; }
+
+function tutStart(){ TUT.on=true; TUT.step=0; NET.mode='solo'; MODE='survival';
+  setState('play'); body.classList.add('cine'); body.classList.remove('duel','zen'); resetGame();
+  document.getElementById('clock').textContent=''; document.getElementById('scoreLabel').textContent='LESSON';
+  musicStart(); S.alive=true; S.lives=3; renderLives(); S.tut=true;
+  if(!TEST) setTimeout(tutNext,500); else tutNext(); }
+function tutNext(){ targets.length=0; arrowActive=false; if(TUT.hazT){clearTimeout(TUT.hazT);TUT.hazT=null;}
+  if(TUT.step>=TUT_STEPS.length){ tutFinish(); return; }
+  const st=TUT_STEPS[TUT.step]; TUT.await=true;
+  bigToast(st.title,'#2ff0d6'); cue(st.msg);
+  if(st.type==='arrow'){ arrowActive=true; const a=ARROWS[3]; // right (clear, easy)
+    targets.push({type:'arrow',x:W/2,y:H*0.46,r:48,life:99,age:0,dir:a,resolved:false,tut:true}); }
+  else { const p=pickPos(0.2);
+    targets.push({type:st.type,x:p.x,y:p.y,r:30,life:99,age:0,resolved:false,spin:0,tut:true});
+    if(st.type==='hazard'){ // lesson: do NOT press; auto-advance after a short survival window
+      const adv=()=>{ if(TUT.on&&TUT.await&&TUT.step<TUT_STEPS.length&&TUT_STEPS[TUT.step].type==='hazard'){
+        floatText(W/2,H*0.62,'✓ 触れなかった！','#2ff0d6'); tutHit('avoid'); } };
+      if(!TEST) TUT.hazT=setTimeout(adv,2200); }
+  }
+}
+function tutHit(kind){ if(!TUT.on||!TUT.await)return; const st=TUT_STEPS[TUT.step]; if(!st)return;
+  if(kind===st.type || (kind==='avoid'&&st.type==='hazard')){
+    TUT.await=false; TUT.step++; floatText(W/2,H*0.62,'✓ GOOD','#2ff0d6'); doFlash(.3);
+    if(!TEST) setTimeout(tutNext,820); else tutNext(); }
+}
+function tutFinish(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); tutDone=true; saveTut(); updTutBtn();
+  bigToast('READY','#ffd166'); cue('準備完了 — 本番へ');
+  if(!TEST) setTimeout(()=>{ setState('title'); body.classList.remove('cine'); refreshBest(); },1100);
+  else setState('title'); }
+function tutAbort(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); targets.length=0; }
+
+resize(); renderLives(); loadBest(); loadDiff(); loadMode(); loadTut(); loadName().then(refreshLBUI); requestAnimationFrame(frame);
 
 if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,endRun,
   buildSchedule,seedHash,onData,updVS,resolveRound,finishRound,showMatchResult,showSoloResult,incomingAttack,
+  tutStart,tutNext,tutHit,tutFinish, get TUT(){return TUT;}, get tutDone(){return tutDone;}, musicTick,
+  submitScore,fetchTop,openBoard,renderBoard, get LB_ENABLED(){return LB_ENABLED;}, get BOARD(){return BOARD;},
+  get hitstop(){return hitstop;},
   get NET(){return NET;}, get spawnCount(){return spawnCount;}, get MODE(){return MODE;}, get roundDur(){return roundDur;}, get runClock(){return runClock;},
   setMode(m){ if(MODES[m]){selMode=m;MODE=m;} }, setDiff(dk){ if(TIERS[dk])DIFFK=dk; },
   beginDuelTEST(seed,dk){ if(dk)DIFFK=dk; NET.mode='duel'; MODE='ta'; NET.round=1; NET.myWins=0; NET.oppWins=0;
