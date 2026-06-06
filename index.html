@@ -106,6 +106,7 @@
   body[data-state="pause"] #pause{display:flex;}
   body[data-state="lobby"] #lobby{display:flex;}
   body[data-state="board"] #board{display:flex;}
+  body[data-state="settings"] #settings{display:flex;}
 
   .kicker{font-size:11px;letter-spacing:.7em;color:var(--teal);font-weight:700;text-indent:.7em;opacity:0;animation:fadeUp .8s .15s forwards;}
   .logo{font-family:"Dela Gothic One";font-size:clamp(78px,27vw,180px);line-height:.86;
@@ -148,6 +149,25 @@
   .btn2.primary{color:#06100f;border:none;background:linear-gradient(180deg,var(--cyan),var(--teal-d));
     box-shadow:0 0 0 2px rgba(255,255,255,.3) inset,0 10px 30px rgba(47,240,214,.45);}
   .btn2:active{transform:scale(.96);}
+
+  /* ===== settings / accessibility ===== */
+  #settings{background:rgba(2,9,8,.82);backdrop-filter:blur(7px);}
+  .set-list{display:flex;flex-direction:column;gap:17px;width:100%;max-width:340px;margin:22px 0 8px;}
+  .set-row{display:flex;flex-direction:column;gap:9px;text-align:left;}
+  .set-row .lab{font-size:11px;letter-spacing:.26em;color:var(--ink-dim);font-weight:700;display:flex;justify-content:space-between;align-items:baseline;}
+  .set-row .lab .val{color:var(--teal);letter-spacing:.05em;font-size:13px;}
+  .seg{display:flex;gap:7px;}
+  .seg button{flex:1;font-family:"Zen Kaku Gothic New";font-weight:700;font-size:12px;letter-spacing:.1em;cursor:pointer;
+    padding:11px 0;border-radius:13px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--ink);}
+  .seg button.sel{color:#06100f;border-color:transparent;background:linear-gradient(180deg,var(--cyan),var(--teal-d));
+    box-shadow:0 6px 18px rgba(47,240,214,.32);}
+  .seg button:active{transform:scale(.96);}
+  input[type=range].vol{-webkit-appearance:none;appearance:none;width:100%;height:7px;border-radius:6px;
+    background:rgba(255,255,255,.1);outline:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  input[type=range].vol::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
+    background:linear-gradient(180deg,var(--cyan),var(--teal-d));box-shadow:0 0 10px var(--teal);cursor:pointer;}
+  input[type=range].vol::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;
+    background:var(--teal);box-shadow:0 0 10px var(--teal);cursor:pointer;}
 
   .pause-card{font-family:"Dela Gothic One";font-size:clamp(40px,13vw,90px);
     background:linear-gradient(180deg,#fff,var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent;}
@@ -332,6 +352,9 @@
       <button id="tutBtn">📖 遊び方（チュートリアル）</button>
       <button id="rankBtn" style="display:none;">🏆 ランキング</button>
     </div>
+    <div class="alt-cta" style="animation-delay:1.05s;margin-top:8px;">
+      <button id="setBtn">⚙ 設定・アクセシビリティ</button>
+    </div>
     <div class="best" id="titleBest"></div>
   </section>
 
@@ -414,6 +437,30 @@
     <div class="lobby-row" style="margin-top:16px;"><button class="btn2" id="boardBack">← 戻る</button></div>
   </section>
 
+  <section class="screen" id="settings">
+    <div class="lobby-h" style="font-size:clamp(28px,8vw,46px)">⚙ 設定</div>
+    <div class="lobby-sub">SETTINGS &amp; ACCESSIBILITY</div>
+    <div class="set-list">
+      <div class="set-row">
+        <div class="lab">音量 <span class="val" id="setVolVal">80%</span></div>
+        <input type="range" min="0" max="100" value="80" step="1" class="vol" id="setVol" aria-label="音量">
+      </div>
+      <div class="set-row">
+        <div class="lab">振動（ハプティクス）</div>
+        <div class="seg" id="setHaptic"><button data-v="1">ON</button><button data-v="0">OFF</button></div>
+      </div>
+      <div class="set-row">
+        <div class="lab">モーション軽減</div>
+        <div class="seg" id="setMotion"><button data-v="0">標準</button><button data-v="1">軽減</button></div>
+      </div>
+      <div class="set-row">
+        <div class="lab">色覚サポート（形を強調）</div>
+        <div class="seg" id="setCb"><button data-v="0">OFF</button><button data-v="1">ON</button></div>
+      </div>
+    </div>
+    <div class="lobby-row" style="margin-top:10px;"><button class="btn2 primary" id="setBack">← 戻る</button></div>
+  </section>
+
   <div class="credit">刹那 — 反射の極限</div>
 
 <script>
@@ -433,7 +480,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const LB_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 const TEST = !!(typeof window!=='undefined' && window.__TEST__);
-const RM = (function(){ try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+const RM_OS = (function(){ try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+let RM = RM_OS;                                  // effective reduced-motion (user setting may override OS)
+let volume=0.8, haptics=true, cbMode=false;      // accessibility / settings, persisted
 if(RM) document.body.classList.add('rm');
 
 /* ===== canvas ===== */
@@ -449,7 +498,7 @@ window.addEventListener('resize',resize);
 /* ===== audio ===== */
 let AC=null,master=null,muted=false,musicBus=null,musicFilter=null,sfxBus=null;
 function audioInit(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
-  master=AC.createGain(); master.gain.value=muted?0:0.8; master.connect(AC.destination);
+  master=AC.createGain(); master.gain.value=muted?0:volume; master.connect(AC.destination);
   sfxBus=AC.createGain(); sfxBus.gain.value=1; sfxBus.connect(master);
   musicFilter=AC.createBiquadFilter(); musicFilter.type='lowpass'; musicFilter.frequency.value=14000; musicFilter.Q.value=0.7;
   musicBus=AC.createGain(); musicBus.gain.value=0; musicBus.connect(musicFilter); musicFilter.connect(master);
@@ -704,7 +753,7 @@ function doFlash(a){ if(RM)a*=.4; flashEl.style.transition='none';flashEl.style.
   requestAnimationFrame(()=>{flashEl.style.transition='opacity .25s';flashEl.style.opacity=0;}); }
 function flashDmg(){ dmgEl.style.transition='none';dmgEl.style.opacity=.9;
   requestAnimationFrame(()=>{dmgEl.style.transition='opacity .4s';dmgEl.style.opacity=0;}); }
-function vibrate(p){ if(navigator.vibrate&&!RM) try{navigator.vibrate(p);}catch(e){} }
+function vibrate(p){ if(navigator.vibrate&&!RM&&haptics) try{navigator.vibrate(p);}catch(e){} }
 const toastTxt=document.getElementById('toastTxt');
 function bigToast(txt,color){ toastTxt.textContent=txt;toastTxt.style.color=color||'#fff';
   toastTxt.classList.remove('toastA');void toastTxt.offsetWidth;toastTxt.classList.add('toastA'); }
@@ -871,8 +920,10 @@ function drawHazard(t){ const pulse=0.5+0.5*Math.sin(t.age*14); ctx.save();
   ctx.translate(t.x,t.y);ctx.rotate((t.spin||0)*0.6);
   ctx.strokeStyle='#ff6a3d';ctx.lineWidth=3.4;ctx.shadowColor='#ff3b30';ctx.shadowBlur=10+pulse*10;
   ctx.beginPath(); for(let i=0;i<6;i++){const a=i/6*6.283,r=t.r*1.15,x=Math.cos(a)*r,y=Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.closePath();ctx.stroke();
-  ctx.rotate(-(t.spin||0)*0.6); ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.shadowBlur=0;const s=t.r*0.5;
-  ctx.beginPath();ctx.moveTo(-s,-s);ctx.lineTo(s,s);ctx.moveTo(s,-s);ctx.lineTo(-s,s);ctx.stroke(); ctx.restore(); }
+  ctx.rotate(-(t.spin||0)*0.6); ctx.strokeStyle='#fff';ctx.lineWidth=cbMode?5.5:4;ctx.shadowBlur=0;const s=t.r*(cbMode?0.62:0.5);
+  ctx.beginPath();ctx.moveTo(-s,-s);ctx.lineTo(s,s);ctx.moveTo(s,-s);ctx.lineTo(-s,s);ctx.stroke();
+  if(cbMode){ ctx.setLineDash([6,5]);ctx.lineWidth=2.4;ctx.globalAlpha=.95;ctx.beginPath();ctx.arc(0,0,t.r*1.4,0,6.283);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1; }
+  ctx.restore(); }
 function drawArrow(t){ const p=Math.min(1,t.age/t.life),ringR=t.r+(1-p)*t.r*1.8; ctx.save();
   const g=ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,t.r*1.8);
   g.addColorStop(0,'rgba(255,209,102,.85)');g.addColorStop(.5,'rgba(255,138,30,.4)');g.addColorStop(1,'rgba(255,138,30,0)');
@@ -967,7 +1018,7 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.alive&&
 /* mute */
 const muteBtn=document.getElementById('muteBtn');
 muteBtn.addEventListener('pointerdown',e=>{ e.stopPropagation(); muted=!muted; muteBtn.textContent=muted?'🔇':'🔊';
-  if(master)master.gain.setTargetAtTime(muted?0:0.8,AC.currentTime,0.02); });
+  if(master)master.gain.setTargetAtTime(muted?0:volume,AC.currentTime,0.02); });
 
 /* persistent best (artifact storage; safe fallback) */
 /* fallback to localStorage when host storage isn't provided (e.g. opened directly in a browser) */
@@ -1212,6 +1263,39 @@ async function loadMode(){ try{ if(window.storage){ const r=await window.storage
   if(r&&r.value&&MODES[r.value])selMode=r.value; } }catch(e){} MODE=selMode; setModeUI(); }
 async function saveMode(){ try{ if(window.storage) await window.storage.set('setsuna_mode',selMode,false); }catch(e){} }
 
+/* ===== settings / accessibility ===== */
+function applyRM(v){ RM=!!v; document.body.classList.toggle('rm',RM); }
+function applyCB(v){ cbMode=!!v; document.body.classList.toggle('cb',cbMode); }
+function setVolume(v){ volume=Math.max(0,Math.min(1,v)); if(master&&!muted)master.gain.setTargetAtTime(volume,AC.currentTime,0.02); }
+function syncSettingsUI(){
+  const vs=document.getElementById('setVol'); if(vs)vs.value=Math.round(volume*100);
+  const vv=document.getElementById('setVolVal'); if(vv)vv.textContent=Math.round(volume*100)+'%';
+  document.querySelectorAll('#setHaptic button').forEach(b=>b.classList.toggle('sel',(b.dataset.v==='1')===haptics));
+  document.querySelectorAll('#setMotion button').forEach(b=>b.classList.toggle('sel',(b.dataset.v==='1')===RM));
+  document.querySelectorAll('#setCb button').forEach(b=>b.classList.toggle('sel',(b.dataset.v==='1')===cbMode));
+}
+async function loadSettings(){ try{ if(window.storage){
+  const v=await window.storage.get('setsuna_vol',false); if(v&&v.value!=null){ const n=parseInt(v.value,10); if(!isNaN(n))volume=Math.max(0,Math.min(1,n/100)); }
+  const h=await window.storage.get('setsuna_haptic',false); if(h&&h.value!=null)haptics=(h.value==='1');
+  const c=await window.storage.get('setsuna_cb',false); if(c&&c.value!=null)applyCB(c.value==='1');
+  const m=await window.storage.get('setsuna_rm',false); if(m&&m.value!=null)applyRM(m.value==='1');
+} }catch(e){} syncSettingsUI(); }
+async function saveSettings(){ try{ if(window.storage){
+  await window.storage.set('setsuna_vol',String(Math.round(volume*100)),false);
+  await window.storage.set('setsuna_haptic',haptics?'1':'0',false);
+  await window.storage.set('setsuna_cb',cbMode?'1':'0',false);
+  await window.storage.set('setsuna_rm',RM?'1':'0',false);
+} }catch(e){} }
+document.getElementById('setBtn').addEventListener('click',()=>{audioInit();syncSettingsUI();setState('settings');});
+document.getElementById('setBack').addEventListener('click',()=>{saveSettings();setState('title');refreshBest();});
+{ const vs=document.getElementById('setVol');
+  if(vs){ vs.addEventListener('input',()=>{ audioInit(); const n=parseInt(vs.value,10)||0; setVolume(n/100);
+    const vv=document.getElementById('setVolVal'); if(vv)vv.textContent=n+'%'; });
+    vs.addEventListener('change',saveSettings); } }
+document.getElementById('setHaptic').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; haptics=(b.dataset.v==='1'); syncSettingsUI(); if(haptics)vibrate(20); saveSettings(); });
+document.getElementById('setMotion').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; applyRM(b.dataset.v==='1'); syncSettingsUI(); saveSettings(); });
+document.getElementById('setCb').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; applyCB(b.dataset.v==='1'); syncSettingsUI(); saveSettings(); });
+
 /* boot */
 /* ===== tutorial (first-run guided steps) ===== */
 let tutDone=false;
@@ -1257,7 +1341,7 @@ function tutAbort(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); targ
 
 resize(); renderLives(); buildIntTicks(); requestAnimationFrame(frame);
 // wait for persisted state (best/diff/mode/tutorial/name) before acting on START, so returning players skip the tutorial
-const bootReady = Promise.all([loadBest(),loadDiff(),loadMode(),loadTut(),loadName()]).then(refreshLBUI);
+const bootReady = Promise.all([loadBest(),loadDiff(),loadMode(),loadTut(),loadName(),loadSettings()]).then(refreshLBUI);
 
 if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,endRun,
   buildSchedule,seedHash,onData,updVS,resolveRound,finishRound,showMatchResult,showSoloResult,incomingAttack,

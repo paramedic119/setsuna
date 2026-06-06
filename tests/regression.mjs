@@ -120,6 +120,25 @@ await page.waitForTimeout(200);
 const persist = await page.evaluate(() => document.getElementById('titleBest').textContent);
 ok('E1 best score persists across reload', /4,?242/.test(persist), `titleBest="${persist.trim()}"`);
 
+// ---- F. Settings / accessibility ----
+const fOpen = await page.evaluate(() => { document.getElementById('setBtn').click(); return document.body.dataset.state; });
+await page.evaluate(() => {
+  document.querySelector('#setCb button[data-v="1"]').click();      // colorblind ON
+  document.querySelector('#setHaptic button[data-v="0"]').click();  // haptics OFF
+});
+await page.waitForTimeout(80); // saveSettings() persists asynchronously
+const fApplied = await page.evaluate(() => ({
+  cb: document.body.classList.contains('cb'), cbStore: localStorage.getItem('setsuna_cb'), hap: localStorage.getItem('setsuna_haptic'),
+}));
+await page.reload({ waitUntil: 'load' });
+await page.waitForFunction(() => !!window.__hooks, null, { timeout: 5000 });
+await page.waitForTimeout(200);
+const fPersist = await page.evaluate(() => document.body.classList.contains('cb'));
+ok('F1 settings screen opens', fOpen === 'settings', `state=${fOpen}`);
+ok('F2 colorblind toggle applies + stores', fApplied.cb && fApplied.cbStore === '1', `cb=${fApplied.cb} store=${fApplied.cbStore}`);
+ok('F3 haptics toggle stored', fApplied.hap === '0', `haptic=${fApplied.hap}`);
+ok('F4 colorblind setting persists across reload', fPersist === true);
+
 // ---- report ----
 console.log('\n=== SETSUNA regression suite ===');
 let fail = 0;
