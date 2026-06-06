@@ -925,6 +925,8 @@ muteBtn.addEventListener('pointerdown',e=>{ e.stopPropagation(); muted=!muted; m
   if(master)master.gain.value=muted?0:0.8; });
 
 /* persistent best (artifact storage; safe fallback) */
+/* fallback to localStorage when host storage isn't provided (e.g. opened directly in a browser) */
+if(!window.storage){ try{ if(window.localStorage){ const ls=window.localStorage; window.storage={ async get(k){ const v=ls.getItem(k); return v===null?null:{value:v}; }, async set(k,v){ ls.setItem(k,String(v)); }, async del(k){ ls.removeItem(k); } }; } }catch(e){} }
 async function loadBest(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_best',false); if(r&&r.value)best=parseInt(r.value,10)||0; } }catch(e){} refreshBest(); }
 async function saveBest(){ try{ if(window.storage) await window.storage.set('setsuna_best',String(best),false); }catch(e){} }
 
