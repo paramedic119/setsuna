@@ -98,13 +98,19 @@ const duel = await page.evaluate(() => {
   out.atkRight = h.targets.filter(t => t.type === 'hazard').length;
   h.beginDuelTEST('seedC', 'normal'); h.NET.oppLost = true; h.showMatchResult();
   out.discClass = document.getElementById('verdict').className;
+  // guest adopts the host's authoritative result instead of computing its own
+  h.beginDuelTEST('seedD', 'normal'); h.NET.role = 'guest'; h.NET.round = 1; h.NET.roundResolved = false;
+  h.onData({ t: 'rres', round: 1, hs: 30, gs: 80, win: 'guest', hWins: 0, gWins: 1, over: false });
+  out.gMy = h.NET.myWins; out.gOpp = h.NET.oppWins; out.gOppScore = h.NET.opp.score;
   return out;
 });
 ok('D1 stale round-end dropped', duel.staleDropped);
-ok('D2 valid round-end counts win', duel.myWins === 1, `myWins=${duel.myWins}`);
+ok('D2 host counts win authoritatively', duel.myWins === 1, `myWins=${duel.myWins}`);
 ok('D3 atk from other round ignored', duel.atkWrong === 0, `hazards=${duel.atkWrong}`);
 ok('D4 atk from current round lands', duel.atkRight > 0, `hazards=${duel.atkRight}`);
 ok('D5 disconnect -> win for remaining player', /win/.test(duel.discClass), `class="${duel.discClass}"`);
+ok('D6 guest adopts host result', duel.gMy === 1 && duel.gOpp === 0 && duel.gOppScore === 30,
+  `my=${duel.gMy} opp=${duel.gOpp} oppScore=${duel.gOppScore}`);
 
 // ---- E. Persistence across reload (localStorage fallback shim) ----
 await page.evaluate(() => { try { localStorage.setItem('setsuna_best', '4242'); } catch {} });
