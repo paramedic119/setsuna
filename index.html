@@ -425,7 +425,10 @@ if(RM) document.body.classList.add('rm');
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
 let W=0,H=0,DPR=1;
 function resize(){ DPR=Math.min(window.devicePixelRatio||1,2.5); W=window.innerWidth||390; H=window.innerHeight||780;
-  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); seedMotes(); }
+  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); seedMotes();
+  // keep in-flight targets reachable after an orientation/viewport change
+  for(const t of targets){ if(t.type==='arrow'){ t.x=W/2; t.y=H*0.46; }
+    else{ t.x=Math.min(W-PLACE.margin,Math.max(PLACE.margin,t.x)); t.y=Math.min(H-PLACE.botPad,Math.max(PLACE.topPad,t.y)); } } }
 window.addEventListener('resize',resize);
 
 /* ===== audio ===== */
@@ -477,6 +480,7 @@ function musicTick(){ if(!AC||!MUSIC.on||muted)return;
   const spb=60/MUSIC.bpm, sixteenth=spb/4;
   // FOCUS = underwater lowpass
   if(musicFilter){ const target=S.focusActive>0?500:(6000+it*8000); musicFilter.frequency.setTargetAtTime(target,AC.currentTime,0.12); }
+  if(AC.currentTime-MUSIC.nextT>0.5) MUSIC.nextT=AC.currentTime;   // recover from tab throttling without flooding nodes
   while(AC.currentTime+0.10>=MUSIC.nextT){
     const s=MUSIC.step16%16, bar=Math.floor(MUSIC.step16/16);
     // kick on 0,4,8,12 ; extra syncopation as intensity grows
@@ -672,7 +676,7 @@ function swipeDir(dir){
 function microSlow(){ timeScaleTarget=0.18; setTimeout(()=>{ if(S.focusActive<=0) timeScaleTarget=1; },130); }
 function tryFocus(){ if(S.focus<100||S.focusActive>0||!S.alive)return;
   S.focusActive=4.2;S.focus=0;updFocus(); timeScaleTarget=0.34; sFocus(); doFlash(.7); vibrate([20,40,20]); bigToast('FOCUS','#ffd166');
-  if(NET.mode==='duel'){ netSend({t:'atk'}); floatText(W/2,H*0.30,'⚡ 妨害発射','#ffd166'); } }
+  if(NET.mode==='duel'){ netSend({t:'atk',round:NET.round}); floatText(W/2,H*0.30,'⚡ 妨害発射','#ffd166'); } }
 function incomingAttack(){ if(!S.alive)return;
   cue('⚠ 妨害を受けた！'); doFlash(.5); shake=Math.max(shake,RM?8:18); sFail();
   const n=2+((Math.random()*2)|0);
@@ -696,9 +700,10 @@ function cue(txt){ cueEl.textContent=txt; cueEl.style.opacity='1'; clearTimeout(
 /* hud */
 const elScore=document.getElementById('score'),elLives=document.getElementById('lives'),
   elFocusFill=document.getElementById('focusFill'),elCombo=document.getElementById('combo'),
-  elComboX=document.getElementById('comboX'),focusBtn=document.getElementById('focusBtn');
+  elComboX=document.getElementById('comboX'),focusBtn=document.getElementById('focusBtn'),
+  elClock=document.getElementById('clock');
 function updHud(){ elScore.textContent=S.score.toLocaleString('en-US'); }
-function updClock(){ const el=document.getElementById('clock'); if(!el)return;
+function updClock(){ const el=elClock; if(!el)return;
   if(roundDur>0){ const r=Math.max(0,roundDur-runClock); el.textContent=r.toFixed(1)+'s'; el.classList.toggle('warn',r<=5); }
   else if(MODE==='zen'&&NET.mode!=='duel'){ const avg=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
     el.textContent=avg!=null?('反応 '+avg+'ms'):'反応 —'; el.classList.remove('warn'); }
@@ -714,6 +719,7 @@ function hideCombo(){ elCombo.classList.remove('show'); }
 
 /* input */
 function pdown(e){ if(!S.alive||S.paused)return; if(e.preventDefault)e.preventDefault(); audioInit();
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}   // keep receiving pointermove even if the swipe drifts off-canvas
   const x=e.clientX,y=e.clientY,consumed=tapAt(x,y); pointers.set(e.pointerId,{x0:x,y0:y,consumed,swiped:false}); }
 function pmove(e){ if(!S.alive||S.paused)return; const r=pointers.get(e.pointerId); if(!r||r.consumed||r.swiped)return;
   const dx=e.clientX-r.x0,dy=e.clientY-r.y0; if(Math.hypot(dx,dy)>=38){ r.swiped=true;r.consumed=true;
@@ -751,7 +757,7 @@ function step(rdt){
     if(t.age>=t.life){ t.resolved=true;t.dead=true;
       if(t.type==='orb'){loseLife(t.x,t.y);floatText(t.x,t.y-26,'MISS','#ff6a3d');}
       else if(t.type==='arrow'){arrowActive=false;loseLife(t.x,t.y);floatText(t.x,t.y-40,'TOO SLOW','#ff6a3d');}
-      else{ addScore(20*comboMult()); bumpCombo(); S.hits++; ring(t.x,t.y,'#1de3c6',t.r,t.r*2.4); sAvoid(); floatText(t.x,t.y-26,'SAFE','#2ff0d6'); } } }
+      else{ addScore(20); ring(t.x,t.y,'#1de3c6',t.r,t.r*2.4); sAvoid(); floatText(t.x,t.y-26,'SAFE','#2ff0d6'); } } }
   }
   for(let i=targets.length-1;i>=0;i--) if(targets[i].dead) targets.splice(i,1);
   for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=rdt/p.max;
@@ -866,7 +872,7 @@ function startCountdown(){
   let n=3; const tick=()=>{ if(n>0){bigToast(String(n),n===1?'#ffd166':'#2ff0d6');sBeep(false);n--;setTimeout(tick,650);}
     else{bigToast('GO','#ff8a1e');sBeep(true);doFlash(.5);cue((T().lab)+' — '+modeCue);S.alive=true;last=0;} }; tick(); }
 function gameOver(){ endRun('dead'); }
-function endRun(reason){ if(!S.alive)return; S.alive=false; timeScaleTarget=1; shake=RM?8:22; doFlash(.6); musicStop();
+function endRun(reason){ if(!S.alive)return; S.alive=false; timeScaleTarget=1; shake=RM?8:22; doFlash(.6); musicStop(); focusBtn.classList.remove('ready');
   if(reason==='dead') sFail(); else sMile();
   if(NET.mode==='duel'){ finishRound(reason); return; }
   showSoloResult(reason); }
@@ -913,16 +919,16 @@ function refreshBest(){ const tb=document.getElementById('titleBest'); tb.textCo
 
 /* pause */
 function pauseGame(){ if(!S.alive||S.paused)return; S.paused=true; setState('pause'); musicStop(); }
-function resumeGame(){ if(!S.paused)return; S.paused=false; setState('play'); last=0; musicStart(); }
+function resumeGame(){ if(!S.paused)return; S.paused=false; setState('play'); last=0; audioInit(); musicStart(); }
 document.getElementById('pauseBtn').addEventListener('pointerdown',e=>{e.stopPropagation();pauseGame();});
 document.getElementById('resumeBtn').addEventListener('click',resumeGame);
 document.getElementById('quitBtn').addEventListener('click',()=>{S.paused=false;S.alive=false;musicStop();if(NET.mode==='duel')leaveDuel();setState('title');body.classList.remove('cine');refreshBest();});
-document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.alive&&!S.paused) pauseGame(); else if(!document.hidden) last=0; });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.alive&&!S.paused) pauseGame(); else if(!document.hidden){ last=0; if(AC&&AC.state==='suspended')AC.resume(); } });
 
 /* mute */
 const muteBtn=document.getElementById('muteBtn');
 muteBtn.addEventListener('pointerdown',e=>{ e.stopPropagation(); muted=!muted; muteBtn.textContent=muted?'🔇':'🔊';
-  if(master)master.gain.value=muted?0:0.8; });
+  if(master)master.gain.setTargetAtTime(muted?0:0.8,AC.currentTime,0.02); });
 
 /* persistent best (artifact storage; safe fallback) */
 /* fallback to localStorage when host storage isn't provided (e.g. opened directly in a browser) */
@@ -932,7 +938,7 @@ async function saveBest(){ try{ if(window.storage) await window.storage.set('set
 
 /* ===== online leaderboard (Supabase REST) ===== */
 let playerName='';
-async function loadName(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_name',false); if(r&&r.value)playerName=r.value; } }catch(e){} }
+async function loadName(){ try{ if(window.storage){ const r=await window.storage.get('setsuna_name',false); if(r&&r.value)playerName=String(r.value).slice(0,16); } }catch(e){} }
 async function saveName(){ try{ if(window.storage) await window.storage.set('setsuna_name',playerName,false); }catch(e){} }
 function lbKey(mode,diff){ return mode+'|'+diff; }
 // category for ranking: zen ranks by reaction (lower better), others by score (higher better)
@@ -967,7 +973,7 @@ document.getElementById('shareBtn').addEventListener('click',async()=>{
   try{ await navigator.clipboard.writeText(txt); bigToast('COPIED','#2ff0d6'); }catch(e){ try{ window.prompt('コピーしてシェア',txt); }catch(_){} }
 });
 
-document.getElementById('startBtn').addEventListener('click',()=>{audioInit(); if(!tutDone){ tutStart(); return; } MODE=selMode;startCountdown();});
+document.getElementById('startBtn').addEventListener('click',()=>{audioInit(); bootReady.then(()=>{ if(body.dataset.state!=='title')return; if(!tutDone){ tutStart(); return; } MODE=selMode;startCountdown(); });});
 document.getElementById('tutBtn').addEventListener('click',()=>{audioInit();tutStart();});
 document.getElementById('retryBtn').addEventListener('click',()=>{audioInit();MODE=selMode;startCountdown();});
 document.getElementById('homeBtn').addEventListener('click',()=>{setState('title');refreshBest();});
@@ -1026,10 +1032,10 @@ function bindConn(conn){ NET.conn=conn;
 function onData(d){ if(!d||typeof d!=='object')return;
   if(d.t==='seed'){ guestRecvSeed(d); return; }
   if(d.t==='st'){ NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.lives=d.l|0;NET.opp.alive=!!d.a; updVS(); return; }
-  if(d.t==='rend'){ if((d.round|0)!==NET.round){ /* stale/next: accept latest */ }
+  if(d.t==='rend'){ if((d.round|0)!==NET.round) return;   // drop stale / out-of-phase round results
     NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0);
     updVS(); resolveRound(); return; }
-  if(d.t==='atk'){ incomingAttack(); return; }
+  if(d.t==='atk'){ if((d.round|0)===NET.round) incomingAttack(); return; }   // ignore attacks tagged to another round
   if(d.t==='rematch'){ if(NET.role==='host') hostStartMatch(); return; }
   if(d.t==='bye'){ onPeerLost('相手が退出しました'); } }
 function onPeerLost(reason){ NET.connected=false;
@@ -1057,7 +1063,11 @@ function connectRoom(){ const code=((document.getElementById('codeInput').value)
   }catch(e){ lobbyStatus('接続できませんでした',true); } }
 function leaveDuel(){ try{netSend({t:'bye'});}catch(e){} try{if(NET.conn)NET.conn.close();}catch(e){}
   try{if(NET.peer)NET.peer.destroy();}catch(e){}
+  if(NET.seedWatch){clearTimeout(NET.seedWatch);NET.seedWatch=null;}
   NET.mode='solo';NET.conn=null;NET.peer=null;NET.connected=false;NET.schedule=null;NET.oppLost=false;
+  NET.round=1;NET.myWins=0;NET.oppWins=0;NET.atkPend=0;NET.roundResolved=false;
+  NET.me={done:false,score:0,combo:0,react:null};
+  NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null};
   MODE=selMode; document.body.classList.remove('duel'); }
 
 function hostStartMatch(){ NET.mode='duel'; MODE='ta'; NET.round=1; NET.myWins=0; NET.oppWins=0;
@@ -1066,13 +1076,13 @@ function hostStartMatch(){ NET.mode='duel'; MODE='ta'; NET.round=1; NET.myWins=0
 function hostSendRoundSeed(){ NET.seed=NET.code+'-r'+NET.round+'-'+Date.now().toString(36); NET.dk=DIFFK;
   NET.schedule=buildSchedule(NET.seed,2000,DIFFK); netSend({t:'seed',seed:NET.seed,dk:DIFFK,round:NET.round}); }
 function hostNextRound(){ NET.round++; hostSendRoundSeed(); beginRound(); }
-function guestRecvSeed(d){ DIFFK=(d.dk&&TIERS[d.dk])?d.dk:DIFFK; NET.dk=DIFFK; setDiffUI();
+function guestRecvSeed(d){ if(NET.seedWatch){clearTimeout(NET.seedWatch);NET.seedWatch=null;} DIFFK=(d.dk&&TIERS[d.dk])?d.dk:DIFFK; NET.dk=DIFFK; setDiffUI();
   NET.round=d.round||1; NET.seed=d.seed; NET.schedule=buildSchedule(d.seed,2000,DIFFK);
   if(NET.round===1||NET.mode!=='duel'){ NET.mode='duel'; MODE='ta'; NET.myWins=0; NET.oppWins=0;
     document.getElementById('vsOpName').textContent=NET.oppName; document.body.classList.add('duel'); }
   lobbyStatus('開始します'); if(!TEST) setTimeout(beginRound,200); else beginRound(); }
 
-function beginRound(){ NET.roundResolved=false; NET.oppLost=NET.oppLost&&false;
+function beginRound(){ if(NET.seedWatch){clearTimeout(NET.seedWatch);NET.seedWatch=null;} NET.roundResolved=false; NET.oppLost=false;
   NET.me={done:false,score:0,combo:0,react:null};
   NET.opp={score:0,combo:0,lives:3,alive:true,done:false,react:null};
   updRoundTag(); startCountdown(); updVS(); }
@@ -1093,7 +1103,8 @@ function resolveRound(){ if(NET.roundResolved)return; if(!NET.me.done)return; if
   const matchOver = NET.myWins>=2 || NET.oppWins>=2 || NET.oppLost || NET.round>=3;
   if(matchOver){ if(!TEST) setTimeout(showMatchResult,1300); else showMatchResult(); return; }
   if(NET.role==='host'){ if(!TEST) setTimeout(hostNextRound,1600); else hostNextRound(); }
-  /* guest waits for next seed */ }
+  else if(!TEST){ // guest: watchdog so a lost next-round seed doesn't hang the match forever
+    NET.seedWatch=setTimeout(()=>{ if(NET.mode==='duel'&&NET.roundResolved) onPeerLost('接続が途切れました'); },8000); } }
 
 function updRoundTag(){ const rt=document.getElementById('roundTag');
   if(rt) rt.textContent='ROUND '+NET.round+'  /  '+NET.myWins+' - '+NET.oppWins; }
@@ -1111,7 +1122,7 @@ function updVS(){ if(NET.mode!=='duel')return; const mx=Math.max(S.score,NET.opp
   document.getElementById('vsOpSc').classList.toggle('vs-lead',NET.opp.score>S.score); }
 function showMatchResult(){ if(document.body.dataset.state==='vs')return; const me=NET.me,op=NET.opp;
   let verdict,cls;
-  if(NET.oppLost){verdict='相手切断';cls='draw';}
+  if(NET.oppLost){verdict='相手切断';cls='win';sMile();doFlash(.5);}   // forfeit: remaining player takes the match
   else if(NET.myWins>NET.oppWins){verdict='MATCH WIN';cls='win';sMile();doFlash(.5);}
   else if(NET.myWins<NET.oppWins){verdict='MATCH LOSE';cls='lose';}
   else{verdict='DRAW';cls='draw';}
@@ -1193,7 +1204,9 @@ function tutFinish(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); tut
   else setState('title'); }
 function tutAbort(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); targets.length=0; }
 
-resize(); renderLives(); loadBest(); loadDiff(); loadMode(); loadTut(); loadName().then(refreshLBUI); requestAnimationFrame(frame);
+resize(); renderLives(); requestAnimationFrame(frame);
+// wait for persisted state (best/diff/mode/tutorial/name) before acting on START, so returning players skip the tutorial
+const bootReady = Promise.all([loadBest(),loadDiff(),loadMode(),loadTut(),loadName()]).then(refreshLBUI);
 
 if(TEST){ window.__hooks={S,targets,particles,floaters,step,render,spawnTarget,tapAt,swipeDir,diff,startCountdown,gameOver,endRun,
   buildSchedule,seedHash,onData,updVS,resolveRound,finishRound,showMatchResult,showSoloResult,incomingAttack,
