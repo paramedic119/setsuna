@@ -1074,6 +1074,7 @@ function onData(d){ if(!d||typeof d!=='object')return;
   if(d.t==='rend'){ if((d.round|0)!==NET.round) return;   // drop stale / out-of-phase round results
     NET.opp.done=true;NET.opp.alive=false;NET.opp.score=d.s|0;NET.opp.combo=d.c|0;NET.opp.react=(d.r==null?null:d.r|0);
     updVS(); resolveRound(); return; }
+  if(d.t==='rres'){ if(NET.role==='guest') guestApplyResult(d); return; }   // authoritative round result from host
   if(d.t==='atk'){ if((d.round|0)===NET.round) incomingAttack(); return; }   // ignore attacks tagged to another round
   if(d.t==='rematch'){ if(NET.role==='host') hostStartMatch(); return; }
   if(d.t==='bye'){ onPeerLost('相手が退出しました'); } }
@@ -1130,20 +1131,31 @@ function finishRound(reason){
   NET.me={done:true,score:S.score,combo:S.maxCombo,react};
   netSend({t:'rend',round:NET.round,s:S.score,c:S.maxCombo,r:react}); updVS();
   if(!TEST) setTimeout(resolveRound,300); else resolveRound(); }
-function resolveRound(){ if(NET.roundResolved)return; if(!NET.me.done)return; if(!NET.opp.done&&!NET.oppLost)return;
-  NET.roundResolved=true;
-  let rwin=0;
-  if(NET.oppLost) rwin=1;
-  else if(NET.me.score>NET.opp.score) rwin=1;
-  else if(NET.me.score<NET.opp.score) rwin=-1;
-  if(rwin>0)NET.myWins++; else if(rwin<0)NET.oppWins++;
+function applyRoundResult(rwin){   // shared per-round UI (rwin: +1 local win / -1 loss / 0 draw)
   bigToast(rwin>0?'ROUND WIN':rwin<0?'ROUND LOSE':'DRAW', rwin>0?'#ffd166':rwin<0?'#9fb4b0':'#5ffff0');
-  if(rwin>0){sMile();doFlash(.4);} updRoundTag();
-  const matchOver = NET.myWins>=2 || NET.oppWins>=2 || NET.oppLost || NET.round>=3;
-  if(matchOver){ if(!TEST) setTimeout(showMatchResult,1300); else showMatchResult(); return; }
-  if(NET.role==='host'){ if(!TEST) setTimeout(hostNextRound,1600); else hostNextRound(); }
-  else if(!TEST){ // guest: watchdog so a lost next-round seed doesn't hang the match forever
-    NET.seedWatch=setTimeout(()=>{ if(NET.mode==='duel'&&NET.roundResolved) onPeerLost('接続が途切れました'); },8000); } }
+  if(rwin>0){sMile();doFlash(.4);} updRoundTag(); }
+function armGuestWatch(){ if(NET.seedWatch)clearTimeout(NET.seedWatch);   // guest fallback if host's rres/seed is lost
+  NET.seedWatch=setTimeout(()=>{ if(NET.mode==='duel') onPeerLost('接続が途切れました'); },9000); }
+// Host is the single authority for round + match outcome; the guest adopts the broadcast result.
+function resolveRound(){ if(NET.roundResolved||!NET.me.done)return;
+  if(NET.role!=='host'){ if(!TEST) armGuestWatch(); return; }   // guest waits for authoritative 'rres'
+  if(!NET.opp.done&&!NET.oppLost)return;
+  hostResolveRound(); }
+function hostResolveRound(){ if(NET.roundResolved)return; NET.roundResolved=true;
+  const hs=NET.me.score|0, gs=NET.opp.score|0;
+  let win='draw'; if(NET.oppLost||hs>gs)win='host'; else if(gs>hs)win='guest';
+  if(win==='host')NET.myWins++; else if(win==='guest')NET.oppWins++;
+  const over = NET.myWins>=2 || NET.oppWins>=2 || NET.oppLost || NET.round>=3;
+  netSend({t:'rres',round:NET.round,hs,gs,win,hWins:NET.myWins,gWins:NET.oppWins,over});   // absolute host/guest terms
+  applyRoundResult(win==='host'?1:win==='guest'?-1:0);
+  if(over){ if(!TEST) setTimeout(showMatchResult,1300); else showMatchResult(); }
+  else { if(!TEST) setTimeout(hostNextRound,1600); else hostNextRound(); } }
+function guestApplyResult(d){ if(NET.roundResolved||(d.round|0)!==NET.round)return; NET.roundResolved=true;
+  if(NET.seedWatch){clearTimeout(NET.seedWatch);NET.seedWatch=null;}
+  NET.myWins=d.gWins|0; NET.oppWins=d.hWins|0; NET.opp.score=d.hs|0; updVS();   // adopt host tally (absolute -> guest view)
+  applyRoundResult(d.win==='guest'?1:d.win==='host'?-1:0);
+  if(d.over){ if(!TEST) setTimeout(showMatchResult,1300); else showMatchResult(); }
+  else if(!TEST){ armGuestWatch(); } }   // not over: wait for the next seed
 
 function updRoundTag(){ const rt=document.getElementById('roundTag');
   if(rt) rt.textContent='ROUND '+NET.round+'  /  '+NET.myWins+' - '+NET.oppWins; }
