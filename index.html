@@ -67,6 +67,19 @@
   .focus-fill{position:absolute;inset:0;width:0%;background:linear-gradient(90deg,var(--amber),var(--gold));
     box-shadow:0 0 14px var(--amber);transition:width .12s;}
   .focus-txt{font-size:9px;letter-spacing:.35em;color:var(--ink-dim);font-weight:700;margin-top:5px;}
+  /* difficulty / intensity curve meter */
+  .int-rail{margin-top:10px;width:108px;height:6px;border-radius:6px;background:rgba(255,255,255,.08);
+    position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);overflow:hidden;}
+  .int-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:6px;
+    background:linear-gradient(90deg,var(--teal) 0%,var(--gold) 58%,var(--danger) 100%);
+    background-size:108px 100%;box-shadow:0 0 12px rgba(255,138,30,.45);transition:box-shadow .3s;}
+  .int-rail .tick{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.22);}
+  .int-rail.bump{animation:intBump .5s ease;}
+  @keyframes intBump{0%{transform:scaleY(1)}38%{transform:scaleY(2.1)}100%{transform:scaleY(1)}}
+  .int-txt{font-size:9px;letter-spacing:.3em;color:var(--ink-dim);font-weight:700;margin-top:5px;
+    display:flex;gap:7px;align-items:center;}
+  .int-lv{color:var(--ink);letter-spacing:.15em;transition:color .3s;}
+  body.duel .int-rail,body.duel .int-txt{display:none;}
   .combo{position:absolute;top:23%;left:0;right:0;text-align:center;pointer-events:none;opacity:0;}
   .combo .x{font-family:"Dela Gothic One";font-size:clamp(46px,17vw,120px);line-height:.85;
     color:var(--gold);text-shadow:0 0 30px rgba(255,138,30,.6);}
@@ -261,6 +274,8 @@
         <div class="lives" id="lives"></div>
         <div class="focus-rail"><div class="focus-fill" id="focusFill"></div></div>
         <div class="focus-txt" id="focusTxt">FOCUS</div>
+        <div class="int-rail" id="intRail"><div class="int-fill" id="intFill"></div></div>
+        <div class="int-txt"><span>INTENSITY</span><span class="int-lv" id="intLv">LV.1</span></div>
       </div>
       <div class="ctrls">
         <button class="icbtn" id="pauseBtn" aria-label="pause">⏸</button>
@@ -701,8 +716,32 @@ function cue(txt){ cueEl.textContent=txt; cueEl.style.opacity='1'; clearTimeout(
 const elScore=document.getElementById('score'),elLives=document.getElementById('lives'),
   elFocusFill=document.getElementById('focusFill'),elCombo=document.getElementById('combo'),
   elComboX=document.getElementById('comboX'),focusBtn=document.getElementById('focusBtn'),
-  elClock=document.getElementById('clock');
+  elClock=document.getElementById('clock'),
+  elIntRail=document.getElementById('intRail'),elIntFill=document.getElementById('intFill'),elIntLv=document.getElementById('intLv');
 function updHud(){ elScore.textContent=S.score.toLocaleString('en-US'); }
+/* difficulty curve meter: stage thresholds in seconds (LV.1..MAX); mirrors diff() unlocks (hazard@5, arrow@10) */
+const INT_STAGES=[0,5,10,20,32,46,60], INT_MAXT=INT_STAGES[INT_STAGES.length-1];
+let intStage=0;
+function buildIntTicks(){ if(!elIntRail)return;
+  for(let i=1;i<INT_STAGES.length-1;i++){ const d=document.createElement('div'); d.className='tick';
+    d.style.left=(INT_STAGES[i]/INT_MAXT*100)+'%';
+    if(i===1)d.style.background='rgba(255,90,80,.65)';    // hazards unlock
+    else if(i===2)d.style.background='rgba(255,209,102,.65)'; // arrows unlock
+    elIntRail.appendChild(d); } }
+function resetIntensity(){ intStage=0; if(elIntFill)elIntFill.style.width='0%'; if(elIntLv){elIntLv.textContent='LV.1';elIntLv.style.color='var(--ink)';} }
+function updIntensity(){ if(NET.mode==='duel'||S.tut||!elIntFill)return;
+  const t=S.time, ramp=Math.max(0,Math.min(1,t/INT_MAXT));
+  elIntFill.style.width=(ramp*100)+'%';
+  let lv=0; for(let i=0;i<INT_STAGES.length;i++){ if(t>=INT_STAGES[i])lv=i; }
+  if(lv>intStage){ intStage=lv; const isMax=lv>=INT_STAGES.length-1;
+    elIntLv.textContent=isMax?'MAX':('LV.'+(lv+1));
+    elIntLv.style.color=isMax?'var(--danger)':lv>=4?'var(--gold)':'var(--ink)';
+    elIntRail.classList.remove('bump'); void elIntRail.offsetWidth; elIntRail.classList.add('bump');
+    if(lv===1) bigToast('⚠ ハザード','#ff6a3d');
+    else if(lv===2) bigToast('↑ 矢印','#ffd166');
+    else if(isMax){ bigToast('INTENSITY MAX','#ff3b30'); shake=Math.max(shake,RM?4:9); }
+    sBeep(true);
+  } }
 function updClock(){ const el=elClock; if(!el)return;
   if(roundDur>0){ const r=Math.max(0,roundDur-runClock); el.textContent=r.toFixed(1)+'s'; el.classList.toggle('warn',r<=5); }
   else if(MODE==='zen'&&NET.mode!=='duel'){ const avg=S.reactN>0?Math.round(S.reactSum/S.reactN):null;
@@ -741,7 +780,7 @@ function step(rdt){
   for(const m of motes){ m.y+=m.v*rdt*(0.6+intensity()); if(m.y>H+4){m.y=-4;m.x=Math.random()*W;} m.ph+=rdt*2; }
   if(!S.alive||S.paused) return;
   const dt=rdt*timeScale;
-  S.time+=dt;
+  S.time+=dt; updIntensity();
   if(roundDur>0){ runClock+=rdt; updClock(); if(runClock>=roundDur){ endRun('time'); return; } }
   else if(MODE==='zen') updClock();
   if(S.focusActive>0){ S.focusActive-=rdt; if(S.focusActive<=0){S.focusActive=0;timeScaleTarget=1;updFocus();} }
@@ -859,7 +898,7 @@ function resetGame(){ targets.length=0;particles.length=0;floaters.length=0;
   Object.assign(S,{time:0,score:0,combo:0,maxCombo:0,lives:3,maxLives:3,focus:0,focusActive:0,
     alive:false,paused:false,orbHits:0,orbPerfect:0,hits:0,reactSum:0,reactN:0,hazardSeen:false,arrowSeen:false});
   spawnT=0.5;timeScale=1;timeScaleTarget=1;shake=0;arrowActive=false;pointers.clear();spawnCount=0;lastNetTx=0;runClock=0;S.lastPos={x:W/2,y:H/2};
-  updHud();updFocus();renderLives();hideCombo(); cueEl.style.opacity='0'; }
+  updHud();updFocus();renderLives();hideCombo();resetIntensity(); cueEl.style.opacity='0'; }
 function startCountdown(){
   roundDur = (NET.mode==='duel') ? DUEL_DUR : ((MODES[MODE]&&MODES[MODE].dur)||0);
   body.classList.toggle('zen',MODE==='zen'&&NET.mode!=='duel');
@@ -1204,7 +1243,7 @@ function tutFinish(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); tut
   else setState('title'); }
 function tutAbort(){ TUT.on=false; S.tut=false; S.alive=false; musicStop(); targets.length=0; }
 
-resize(); renderLives(); requestAnimationFrame(frame);
+resize(); renderLives(); buildIntTicks(); requestAnimationFrame(frame);
 // wait for persisted state (best/diff/mode/tutorial/name) before acting on START, so returning players skip the tutorial
 const bootReady = Promise.all([loadBest(),loadDiff(),loadMode(),loadTut(),loadName()]).then(refreshLBUI);
 
